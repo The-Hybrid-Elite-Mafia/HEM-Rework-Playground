@@ -1,0 +1,7 @@
+build/
+out/
+soundpack/
+sp/
+Installer/Output/
+*.user
+.vs/

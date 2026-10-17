@@ -1,0 +1,102 @@
+name: Build HEM Rework Playground Windows installer
+
+# Builds the Rework Playground on a Windows machine in the cloud, runs every unit
+# test, makes the installer with Inno Setup and publishes it as a Release.
+# Separate from Hybrid Studio's workflow: different app, different installer.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Configure (downloads JUCE 8.0.15)
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build Release (app + unit tests)
+        run: cmake --build build --config Release --parallel --target ReworkPlayground PlaygroundTests
+
+      - name: Build the HEM Sound Pack (recorded instruments for Band Forge, CC0 sources at fixed commits)
+        shell: bash
+        run: |
+          set -e
+          python -m pip install --quiet numpy scipy soundfile
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/sgossner/VSCO-2-CE.git sp/vsco
+          git -C sp/vsco sparse-checkout set "Strings/Solo Violin/Arco Vib" "Strings/Solo Violin/spic" \
+            "Strings/Cello Section/susvib" "Strings/Viola Section/susvib" "Strings/Violin Section/susVib" \
+            "Strings/Solo Contrabass/Pizz" "Keys/Upright Piano"
+          git -C sp/vsco checkout --quiet 440300901dfe9275fd84e0b7763af1f8443ae62e
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/sfzinstruments/virtuosity_drums.git sp/vd
+          git -C sp/vd sparse-checkout set "Samples/mid" "Samples/kickmic" "Samples/snaremic"
+          git -C sp/vd checkout --quiet 9f04cf9a734527edfbb0a4eee1f674e45bbf71bc
+          python -I Tools/build_sound_pack.py sp/vsco sp/vd soundpack
+          du -sh soundpack
+
+      - name: Keep the sound pack build report
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundPack-build-report
+          path: soundpack/BUILD-REPORT.txt
+
+      - name: Run the unit tests
+        shell: cmd
+        env:
+          HEM_SOUND_PACK: ${{ github.workspace }}\soundpack
+        run: |
+          build\PlaygroundTests_artefacts\Release\PlaygroundTests.exe > tests.txt 2>&1
+          set RC=%ERRORLEVEL%
+          findstr /C:"[FAIL]" /C:"!!!" /C:"HEM TEST SUMMARY" tests.txt
+          exit /b %RC%
+
+      - name: Keep the test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlaygroundTests-log
+          path: tests.txt
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup -y --no-progress
+
+      - name: Build the installer
+        shell: cmd
+        run: |
+          for /f "tokens=4 delims=( " %%v in ('findstr /C:"project(HEMPlayground VERSION" CMakeLists.txt') do set VER=%%v
+          set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+          if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+          "%ISCC%" "/DBuildDir=%GITHUB_WORKSPACE%\build\ReworkPlayground_artefacts\Release" "/DAppVersion=%VER%" "/DSoundPackDir=%GITHUB_WORKSPACE%\soundpack" Installer\ReworkPlayground.iss
+          dir Installer\Output
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReworkPlayground-Windows-Installer
+          path: Installer/Output/*.exe
+          if-no-files-found: error
+
+      - name: Publish the installer as a Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          EXE=$(ls Installer/Output/*.exe | head -1)
+          VER=$(sed -n 's/.*project(HEMPlayground VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          test -n "$VER"
+          SUMMARY=$(grep "HEM TEST SUMMARY" tests.txt || true)
+          gh release create "playground-$VER-run-${{ github.run_id }}" "$EXE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${{ github.sha }}" \
+            --title "HEM Rework Playground $VER (Windows PC)" \
+            --notes "Windows installer built in the cloud from commit ${{ github.sha }}. $SUMMARY. Not code-signed: if Windows SmartScreen says 'Windows protected your PC', click More info, then Run anyway."
