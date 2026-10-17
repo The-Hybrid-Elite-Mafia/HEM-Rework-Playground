@@ -668,18 +668,35 @@ void MainComponent::undoRedo (bool redo)
     status (redo ? "Redo." : "Undo.");
 }
 
+namespace
+{
+    /** Session as text for the "unsaved changes" star, with parameter values rounded to 4 decimals:
+        a value that went through a knob or an undo can come back 0.000001 off, which is not a change. */
+    juce::String comparable (juce::ValueTree t)
+    {
+        t.removeProperty ("position", nullptr);
+        std::function<void (juce::ValueTree)> round = [&round] (juce::ValueTree node)
+        {
+            if (node.hasProperty ("value") && node.hasProperty ("id"))
+            {
+                const double v = node["value"];
+                node.setProperty ("value", std::round (v * 1.0e4) / 1.0e4, nullptr);
+            }
+            for (auto c : node) round (c);
+        };
+        round (t);
+        return t.toXmlString();
+    }
+}
+
 bool MainComponent::isDirty() const
 {
-    auto t = engine.createSessionTree();
-    t.removeProperty ("position", nullptr);
-    return t.toXmlString() != savedState;
+    return comparable (engine.createSessionTree()) != savedState;
 }
 
 void MainComponent::markSaved()
 {
-    auto t = engine.createSessionTree();
-    t.removeProperty ("position", nullptr);
-    savedState = t.toXmlString();
+    savedState = comparable (engine.createSessionTree());
     dirtyCached = false;
     if (auto* w = dynamic_cast<juce::DocumentWindow*> (getTopLevelComponent()))
         w->setName ("HEM Rework Playground  -  " + songName());

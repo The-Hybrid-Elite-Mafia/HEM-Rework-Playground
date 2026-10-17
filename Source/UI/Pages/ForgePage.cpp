@@ -1,4 +1,5 @@
 #include "ForgePage.h"
+#include "Engine/MediaLoader.h"
 
 namespace pg::ui
 {
@@ -163,6 +164,7 @@ ForgePage::ForgePage (AppContext& c) : ctx (c)
         setMode ((Mode) juce::jlimit (0, 2, saved));
     }
 
+    reloadLastTakes();
     startTimerHz (4);
     timerCallback();
 }
@@ -336,6 +338,33 @@ void ForgePage::generate()
 }
 
 void ForgePage::cancel() { if (job != nullptr) job->cancel(); }
+
+void ForgePage::reloadLastTakes()
+{
+    const auto root = AppContext::songsFolder().getChildFile ("Song Forge");
+    auto folders = root.findChildFiles (juce::File::findDirectories, false);
+    juce::File newest;
+    for (const auto& f : folders)   // folder names are "YYYY-MM-DD HH-MM-SS": the largest name is the newest
+        if (f.getFileName() > newest.getFileName() && ! f.findChildFiles (juce::File::findFiles, false, "SF Take *").isEmpty())
+            newest = f;
+    if (newest == juce::File()) return;
+    auto files = newest.findChildFiles (juce::File::findFiles, false, "SF Take *");
+    files.sort();
+    takes.clear();
+    for (const auto& f : files)
+    {
+        if (! MediaLoader::isAudioFile (f)) continue;
+        ace::Take t;
+        t.file = f;
+        t.caption = "from " + newest.getFileName();
+        takes.add (t);
+    }
+    takesFolder = newest;
+    takesPanel.refresh();
+    if (! takes.isEmpty())
+        progressLabel.setText (juce::String (takes.size()) + " take(s) from " + newest.getFileName()
+                               + " are on the left. Pick one and press ADD TO SESSION.", juce::dontSendNotification);
+}
 
 void ForgePage::finished (ace::Result r)
 {

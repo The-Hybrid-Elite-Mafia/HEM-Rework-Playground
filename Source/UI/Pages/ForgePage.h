@@ -63,6 +63,8 @@ private:
     void timerCallback() override;
     void finished (ace::Result);
     void saveTexts();
+    /** After a restart: show the takes of the newest Song Forge folder again (their files are still on disk). */
+    void reloadLastTakes();
     juce::String server() const;
     juce::String apiKey() const;
     juce::File aceFolder() const;
