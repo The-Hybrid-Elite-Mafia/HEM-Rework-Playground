@@ -132,6 +132,8 @@ MainComponent::MainComponent (PlaygroundEngine& e, juce::AudioDeviceManager& d, 
 
     markSaved();
     showTab (tabs::edit);
+    // cloud smoke test: HEM_START_TAB=master opens straight onto the MASTER page (3D meter on screen)
+    if (juce::SystemStats::getEnvironmentVariable ("HEM_START_TAB", {}) == "master") showTab (tabs::master);
     noKeyboardFocus (*this);
     setSize (1600, 900);
     startTimerHz (30);

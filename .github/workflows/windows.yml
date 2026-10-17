@@ -66,6 +66,24 @@ jobs:
           name: PlaygroundTests-log
           path: tests.txt
 
+      - name: Smoke test - the app opens on the MASTER page (3D meter) and stays open
+        shell: pwsh
+        run: |
+          $exe = "build\ReworkPlayground_artefacts\Release\HEM Rework Playground.exe"
+          $env:HEM_START_TAB = "master"
+          $start = Get-Date
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 30
+          if ($p.HasExited) {
+            Write-Host "::error::The app closed by itself (exit code $($p.ExitCode))"
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $start } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -in 'Application Error', 'Windows Error Reporting' } |
+              ForEach-Object { Write-Host $_.Message }
+            exit 1
+          }
+          Write-Host "Still running after 30 s on the MASTER page."
+          Stop-Process -Id $p.Id -Force
+
       - name: Install Inno Setup 6
         run: choco install innosetup -y --no-progress
 

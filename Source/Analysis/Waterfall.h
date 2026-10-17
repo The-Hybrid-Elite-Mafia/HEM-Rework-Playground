@@ -17,6 +17,9 @@ public:
     static constexpr int kRows = 64, kPoints = 112, kOrder = 12, kFftSize = 1 << kOrder, kHop = 1024;
     static constexpr float kFloorDb = -96.0f;
 
+    /** Ready to use straight away (48 kHz); prepare() again when the real rate is known. */
+    Waterfall() { prepare (48000.0); }
+
     void prepare (double sampleRate);
     void reset();
     /** Mono samples, any count. */

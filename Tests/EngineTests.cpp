@@ -224,6 +224,9 @@ public:
 
         beginTest ("3D spectrum: a full-scale 1 kHz sine peaks at about 0 dB at 1 kHz, far below it elsewhere");
         {
+            analysis::Waterfall fresh;   // drawn before any audio arrives (this crashed 0.7.0 on the MASTER page)
+            for (int age = 0; age < analysis::Waterfall::kRows; ++age)
+                expectEquals (fresh.row (age)[analysis::Waterfall::kPoints - 1], analysis::Waterfall::kFloorDb);
             analysis::Waterfall w;
             w.prepare (kFs);
             std::vector<float> x ((size_t) kFs);
