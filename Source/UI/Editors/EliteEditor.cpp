@@ -404,7 +404,7 @@ void EliteEditor::renderBackground()
     for (auto row : chromeRows) kit.draw (g, FaceplateKit::chromeStrip, row, pieceScale);
     kit.draw (g, FaceplateKit::plate, presetPlate, presetPlate.getHeight() / (float) FaceplateKit::plate.src.getHeight());
     const int nFactory = (int) Presets::factory (plugin.getInfo().id).size();
-    PlaygroundLookAndFeel::drawEngraved (g, juce::String (nFactory) + " PRESETS", statusArea, juce::Justification::centredRight, 13.0f * U);
+    PlaygroundLookAndFeel::drawEngraved (g, juce::String (nFactory + userPresetCount) + " PRESETS", statusArea, juce::Justification::centredRight, 13.0f * U);
     kit.draw (g, FaceplateKit::panel, panelArea, pieceScale);
     if (! glassArea.isEmpty()) kit.draw (g, FaceplateKit::glass, glassArea, pieceScale);
     kit.draw (g, FaceplateKit::chromeStrip, bottomArea, bottomArea.getHeight() / (float) FaceplateKit::chromeStrip.src.getHeight());
@@ -602,7 +602,12 @@ void EliteEditor::rebuildPresetMenu()
     presetBox.addItem ("Delete my preset \"" + currentPreset + "\"", kDeleteId);
     presetBox.setItemEnabled (kDeleteId, user.contains (currentPreset));
     presetBox.addItem ("Reset to default", kResetId);
-    presetBox.setText (currentPreset, juce::dontSendNotification);
+    // Nothing stays selected: the name is shown as "nothing selected" text, so choosing the preset that
+    // is already showing still loads it (a ComboBox sends no change for re-picking the selected item).
+    presetBox.setSelectedId (0, juce::dontSendNotification);
+    presetBox.setTextWhenNothingSelected (currentPreset);
+    userPresetCount = user.size();
+    repaint();
 }
 
 void EliteEditor::presetChosen()
@@ -624,7 +629,7 @@ void EliteEditor::presetChosen()
     }
     else if (id == kSaveId)
     {
-        presetBox.setText (currentPreset, juce::dontSendNotification);
+        presetBox.setSelectedId (0, juce::dontSendNotification);
         savePresetAs();
         return;
     }

@@ -153,42 +153,46 @@ void MasterPage::resized()
     for (auto& sl : slots) sl->setBounds (s.removeFromTop (h).reduced (0, 2));
     r.removeFromTop (12);
     loudArea = r;
-    // the 3D meter takes the right side of the loudness panel (all of it when the panel is short)
+    auto buttons = loudArea.removeFromBottom (40).withWidth (juce::jmin (r.getWidth(), 420));   // full-width row: labels fit
+    loudArea.removeFromBottom (8);
+    // the 3D meter takes the right side of the loudness panel
     scopeArea = loudArea.removeFromRight (juce::jmax (loudArea.getWidth() * 3 / 5, loudArea.getWidth() - 300));
     loudArea.removeFromRight (12);
     spectrum.setBounds (scopeArea);
-    auto buttons = loudArea.removeFromBottom (40);
     matchButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2));
     resetButton.setBounds (buttons.reduced (2));
     addMasterButton.setBounds (loudArea.withSizeKeepingCentre (juce::jmin (260, loudArea.getWidth()), 44));
 
-    auto e = exportArea.reduced (14, 12).withTrimmedTop (30);
-    auto row = [&e] (int h2) { auto x = e.removeFromTop (h2); e.removeFromTop (8); return x; };
-    e.removeFromTop (18);
+    // EXPORT WAV must always be on screen: the button, progress bar and message are placed from the
+    // bottom first, then the settings rows share what is left (gaps shrink on short windows).
+    auto e = exportArea.reduced (14, 12).withTrimmedTop (30 + 18);
+    auto bottom = e.removeFromBottom (44 + 8 + 12 + 44);
+    auto b = bottom.removeFromTop (44);
+    revealButton.setBounds (b.removeFromRight (120).reduced (2));
+    exportButton.setBounds (b.reduced (2));
+    const int gap = juce::jlimit (2, 14, (e.getHeight() - 212) / 9);
+    auto row = [&e, gap] (int h2) { auto x = e.removeFromTop (h2); e.removeFromTop (gap); return x; };
     fileName.setBounds (row (32));
-    e.removeFromTop (14);
+    e.removeFromTop (gap);
     folderButton.setBounds (row (32).removeFromLeft (130));
-    e.removeFromTop (14);
+    e.removeFromTop (gap);
     finish.setBounds (row (30));
     bits.setBounds (row (30));
     rate.setBounds (row (30));
-    e.removeFromTop (14);
+    e.removeFromTop (gap);
     tail.setBounds (row (28));
     beforeVersion.setBounds (row (30));
-    auto b = row (52);
-    revealButton.setBounds (b.removeFromRight (120).reduced (2));
-    exportButton.setBounds (b.reduced (2));
 }
 
 void MasterPage::paint (juce::Graphics& g)
 {
     auto box = [&g] (juce::Rectangle<int> r) { g.setColour (juce::Colour (0xff12151a).withAlpha (0.7f)); g.fillRoundedRectangle (r.toFloat(), 6.0f); };
     box (slotsArea.expanded (8, 4));
-    box (loudArea.expanded (8, 4).withBottom (getHeight() - 8));
+    box (loudArea.getUnion (scopeArea).expanded (8, 4).withBottom (getHeight() - 8));
     box (exportArea);
     PlaygroundLookAndFeel::drawPanelText (g, "MASTER INSERTS", slotsArea.withHeight (26).toFloat(), juce::Justification::centredLeft, 15.0f, kGold.brighter (0.4f));
 
-    auto lr = loudArea.withTrimmedBottom (48).toFloat();
+    auto lr = loudArea.toFloat();
     if (auto* m = findEliteMaster())
     {
         addMasterButton.setVisible (false);
@@ -227,7 +231,7 @@ void MasterPage::paint (juce::Graphics& g)
                                           juce::Rectangle<float> ((float) folderButton.getRight() + 10.0f, (float) folderButton.getY(), e.getRight() - (float) folderButton.getRight() - 10.0f, (float) folderButton.getHeight()),
                                           juce::Justification::centredLeft, 11.0f, colours::paperDim);
     // progress
-    auto pb = juce::Rectangle<float> ((float) exportButton.getX(), (float) exportButton.getBottom() + 14.0f, (float) (revealButton.getRight() - exportButton.getX()), 12.0f);
+    auto pb = juce::Rectangle<float> ((float) exportButton.getX(), (float) exportButton.getBottom() + 8.0f, (float) (revealButton.getRight() - exportButton.getX()), 12.0f);
     g.setColour (juce::Colour (0xff0b0d10));
     g.fillRoundedRectangle (pb, 4.0f);
     if (job != nullptr || progress > 0.0)
@@ -237,7 +241,7 @@ void MasterPage::paint (juce::Graphics& g)
     }
     g.setColour (colours::paper);
     g.setFont (PlaygroundLookAndFeel::font (12.5f, false));
-    g.drawFittedText (exportMessage, pb.translated (0.0f, 18.0f).withHeight (60.0f).toNearestInt(), juce::Justification::topLeft, 4);
+    g.drawFittedText (exportMessage, pb.translated (0.0f, 16.0f).withHeight (44.0f).toNearestInt(), juce::Justification::topLeft, 3);
 }
 
 void MasterPage::timerCallback()

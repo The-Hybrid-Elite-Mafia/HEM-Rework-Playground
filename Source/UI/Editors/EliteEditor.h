@@ -115,6 +115,7 @@ private:
     juce::ComboBox presetBox;
     juce::TextButton prevButton { "<" }, nextButton { ">" }, saveButton { "SAVE" };
     juce::String currentPreset { "Default" };
+    int userPresetCount = 0;
     juce::StringArray menuNames;   // index = combo item id - 1 for presets
 
     std::vector<float> meterShown;
