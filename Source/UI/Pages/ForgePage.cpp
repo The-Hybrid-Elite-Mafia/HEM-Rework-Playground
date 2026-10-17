@@ -44,6 +44,7 @@ namespace
         s.setRotaryParameters (juce::degreesToRadians (225.0f), juce::degreesToRadians (495.0f), true);
         s.setRange (lo, hi, step);
         s.setValue (def, juce::dontSendNotification);
+        s.setDoubleClickReturnValue (true, def);   // double-click = back to where it started
         s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 74, 20);
         s.setTextValueSuffix (suffix);
         s.setColour (juce::Slider::textBoxTextColourId, kForge.brighter (0.5f));

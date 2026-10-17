@@ -21,6 +21,7 @@ namespace
     {
         mNew = 1, mOpen, mSave, mSaveAs, mImport, mExport, mAudio, mQuit, mClearRecent,
         mRename = 20, mRemoveTrack, mClearSolo, mClearMute, mResetFader,
+        mUndo = 30, mRedo,
         mTabEdit = 40, mTabMix, mTabForge, mTabMaster, mZoomIn, mZoomOut, mFit, mCloseWindows,
         mPluginBase = 60,
         mPresetsFolder = 80, mSongsFolder,
@@ -312,6 +313,12 @@ void MainComponent::timerCallback()
     if (! bpmLabel.isBeingEdited())
         bpmLabel.setText (juce::String (engine.getAPVTS().getRawParameterValue (E::Ids::bpm)->load(), 1) + " BPM", juce::dontSendNotification);
     if (tick % 8 == 0) engine.collectGarbage();
+    if (tick % 6 == 0 && ! openingSession) history.poll();
+    if (const bool p = engine.isPlaying(); p != lastPlaying)
+    {
+        lastPlaying = p;
+        if (statusTime == 0) { status (p ? juce::String ("Playing") : juce::String ("Stopped")); statusTime = 0; }
+    }
     if (tick % 30 == 0)
     {
         const bool d = isDirty();
@@ -365,6 +372,8 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     if (k == juce::KeyPress::returnKey) { engine.setPositionSeconds (0.0); return true; }
     if (k == juce::KeyPress ('l')) { toggleLoop(); return true; }
     if (k == juce::KeyPress ('b')) { transport[4]->triggerClick(); return true; }
+    if (k == juce::KeyPress ('z', cmd, 0)) { undoRedo (false); return true; }
+    if (k == juce::KeyPress ('y', cmd, 0) || k == juce::KeyPress ('z', cmd | juce::ModifierKeys::shiftModifier, 0)) { undoRedo (true); return true; }
     if (k == juce::KeyPress ('s', cmd, 0)) { save(); return true; }
     if (k == juce::KeyPress ('s', cmd | juce::ModifierKeys::shiftModifier, 0)) { saveAs(); return true; }
     if (k == juce::KeyPress ('o', cmd, 0)) { checkSaveThen ([this] { openDialog(); }); return true; }
@@ -405,6 +414,9 @@ juce::PopupMenu MainComponent::getMenuForIndex (int index, const juce::String&)
             break;
         }
         case 1:
+            m.addItem (mUndo, "Undo      Ctrl+Z", history.canUndo());
+            m.addItem (mRedo, "Redo      Ctrl+Y", history.canRedo());
+            m.addSeparator();
             m.addItem (mRename, "Rename Selected Track...", trackSelected);
             m.addItem (mRemoveTrack, "Remove Selected Track", trackSelected);
             m.addSeparator();
@@ -492,6 +504,8 @@ void MainComponent::menuItemSelected (int id, int)
                 for (int b = 0; b < E::kNumBuses; ++b)
                     if (auto* p = engine.getAPVTS().getParameter (E::Ids::bus (b, "mute"))) p->setValueNotifyingHost (0.0f);
             break;
+        case mUndo: undoRedo (false); break;
+        case mRedo: undoRedo (true); break;
         case mResetFader:
         {
             const auto vid = E::isTrack (ctx.selectedStrip) ? E::Ids::track (ctx.selectedStrip, "vol")
@@ -641,6 +655,17 @@ void MainComponent::importFiles (const juce::Array<juce::File>& files)
 }
 
 //==============================================================================
+void MainComponent::undoRedo (bool redo)
+{
+    if (openingSession) return;
+    history.beforeStructuralRestore = [this] { windows.closeAll(); };
+    const bool done = redo ? history.redo() : history.undo();
+    if (! done) { status (redo ? "Nothing to redo." : "Nothing to undo."); return; }
+    if (history.lastRestoreWasStructural()) refreshAll();
+    repaint();
+    status (redo ? "Redo." : "Undo.");
+}
+
 bool MainComponent::isDirty() const
 {
     auto t = engine.createSessionTree();
@@ -683,6 +708,7 @@ void MainComponent::newSession()
     editView.autoFit = true;
     editView.scrollY = 0;
     markSaved();
+    history.reset();
     refreshAll();
     status ("New session: Elite Verb is on the Reverb bus, Elite Delay on the Delay bus, Elite Master on the master.");
 }
@@ -724,6 +750,7 @@ void MainComponent::openSession (const juce::File& file)
             safe->editView.autoFit = true;
             safe->editView.scrollY = 0;
             safe->markSaved();
+            safe->history.reset();
             safe->refreshAll();
             safe->status (missing.isEmpty() ? "Opened " + file.getFileName()
                                             : "Opened " + file.getFileName() + "  -  " + juce::String (missing.size()) + " audio file(s) not found: "

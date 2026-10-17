@@ -57,6 +57,8 @@ MasterPage::MasterPage (AppContext& c) : ctx (c)
     fileName.setColour (juce::TextEditor::textColourId, colours::paper);
     fileName.setColour (juce::TextEditor::outlineColourId, kGold.withAlpha (0.4f));
     fileName.setText (ctx.settings.getValue ("exportName", "My Song - master"), false);
+    fileName.onReturnKey = [this] { unfocusAllComponents(); };   // ENTER / ESC hand SPACE back to play/stop
+    fileName.onEscapeKey = [this] { unfocusAllComponents(); };
     addAndMakeVisible (fileName);
 
     auto combo = [this] (juce::ComboBox& cb, const juce::StringArray& items, const juce::String& key, int def)
@@ -106,6 +108,7 @@ MasterPage::MasterPage (AppContext& c) : ctx (c)
     revealButton.onClick = [this] { if (lastExport.existsAsFile()) lastExport.revealToUser(); };
     for (auto* b : { &folderButton, &exportButton, &revealButton }) addAndMakeVisible (*b);
 
+    addAndMakeVisible (spectrum);
     rebuild();
     startTimerHz (15);
 }
@@ -150,6 +153,10 @@ void MasterPage::resized()
     for (auto& sl : slots) sl->setBounds (s.removeFromTop (h).reduced (0, 2));
     r.removeFromTop (12);
     loudArea = r;
+    // the 3D meter takes the right side of the loudness panel (all of it when the panel is short)
+    scopeArea = loudArea.removeFromRight (juce::jmax (loudArea.getWidth() * 3 / 5, loudArea.getWidth() - 300));
+    loudArea.removeFromRight (12);
+    spectrum.setBounds (scopeArea);
     auto buttons = loudArea.removeFromBottom (40);
     matchButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2));
     resetButton.setBounds (buttons.reduced (2));
@@ -252,9 +259,39 @@ void MasterPage::startExport()
     auto name = juce::File::createLegalFileName (fileName.getText().trim());
     if (name.isEmpty()) name = "Rework Playground mix";
     ctx.settings.setValue ("exportName", fileName.getText());
+    unfocusAllComponents();   // SPACE is play/stop again once you press EXPORT
 
+    const auto target = exportFolder().getChildFile (name + ".wav");
+    if (! target.existsAsFile()) { runExport (target); return; }
+
+    // never overwrite an earlier export without asking
+    const auto numbered = target.getNonexistentSibling (false);
+    auto* w = new juce::AlertWindow ("File already exists",
+                                     target.getFileName() + " is already in the export folder.",
+                                     juce::MessageBoxIconType::QuestionIcon, this);
+    w->addButton ("SAVE AS \"" + numbered.getFileNameWithoutExtension() + "\"", 2);
+    w->addButton ("REPLACE IT", 1);
+    w->addButton ("CANCEL", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    juce::Component::SafePointer<MasterPage> safe (this);
+    w->enterModalState (true, juce::ModalCallbackFunction::create ([safe, target, numbered] (int result)
+    {
+        if (safe == nullptr || result == 0) return;
+        safe->runExport (result == 2 ? numbered : target);
+    }), true);
+}
+
+void MasterPage::visibilityChanged()
+{
+    // the file-name box must not keep the keyboard when the page opens, or SPACE types a space into it
+    if (isShowing() && fileName.hasKeyboardFocus (true)) unfocusAllComponents();
+    spectrum.visibilityChanged();   // the 3D meter only listens while this page is on screen
+}
+
+void MasterPage::runExport (const juce::File& target)
+{
+    if (job != nullptr) return;
     ExportOptions o;
-    o.file = exportFolder().getChildFile (name + ".wav");
+    o.file = target;
     o.bitDepth = bits.getSelectedItemIndex() == 0 ? 16 : (bits.getSelectedItemIndex() == 2 ? 32 : 24);
     o.sampleRate = rate.getSelectedItemIndex() == 0 ? 44100.0 : (rate.getSelectedItemIndex() == 2 ? 96000.0 : 48000.0);
     o.tailSeconds = tail.getValue();
@@ -268,7 +305,6 @@ void MasterPage::startExport()
             media[m->getFile().getFullPathName()] = m;   // reuse the decoded audio: no second load from disk
 
     auto exporter = std::make_unique<OfflineExport> (session, media, o);
-    const auto target = o.file;
     juce::Component::SafePointer<MasterPage> safe (this);
     job = std::make_unique<ExportJob> (std::move (exporter), [safe, target, clean = o.clean] (bool ok, juce::String err, float peak, float cleanGain)
     {

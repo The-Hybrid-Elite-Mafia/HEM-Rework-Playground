@@ -322,6 +322,33 @@ public:
             expectLessThan ((double) peak (s.l, (int) kFs / 4), 1.0);
         }
 
+        beginTest ("Elite Vocalis: OUTPUT +12 dB still never goes past the built-in limiter (-0.3 dBFS)");
+        {
+            auto p = make ("elite-vox");
+            set (*p, "output", 12.0f);
+            set (*p, "squeeze", 6.0f);
+            auto s = sine ((int) kFs, 300.0, 0.9f);
+            run (*p, s);
+            expectLessThan ((double) peak (s.l, (int) kFs / 4), (double) params::dbToGain (-0.29f), "Vocalis output past its limiter");
+            expectGreaterThan (p->getReadout (EliteVox::limitGr), 3.0f, "LIMIT meter must show the limiting");
+        }
+
+        beginTest ("Elite Master: INPUT can go below 0 dB, so MATCH TARGET can also turn a hot mix down");
+        {
+            auto p = make ("elite-master");
+            auto* in = p->getAPVTS().getParameter ("input");
+            expectWithinAbsoluteError (in->convertFrom0to1 (0.0f), -12.0f, 1.0e-4f);
+            set (*p, "input", -6.0f);
+            expectWithinAbsoluteError (p->getAPVTS().getRawParameterValue ("input")->load(), -6.0f, 0.01f);
+            // a mix at about -6 LUFS against the -14 LUFS target: SUGGESTED IN must be negative
+            auto s = sine ((int) kFs * 4, 1000.0, 0.7f);
+            set (*p, "input", 0.0f);
+            run (*p, s);
+            expectLessThan (p->getReadout (EliteMaster::suggestedInput), -3.0f, "suggestion should be to turn down");
+            expect (dynamic_cast<EliteMaster&> (*p).matchTarget());
+            expectLessThan (p->getAPVTS().getRawParameterValue ("input")->load(), -3.0f);
+        }
+
         beginTest ("Elite Vocalis: gate silences noise below its threshold");
         {
             auto p = make ("elite-vox");

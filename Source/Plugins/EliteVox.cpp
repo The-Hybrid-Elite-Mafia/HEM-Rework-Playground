@@ -91,11 +91,11 @@ void EliteVox::processDsp (float* left, float* right, int n) noexcept
         const float gg = dsp::dbToLin (-gGr);
         l *= gg; r *= gg;
         const float cGr = comp.process (l, r);
-        const float cg = dsp::dbToLin (-cGr) * makeup.getNextValue();
+        // OUTPUT goes in BEFORE the built-in limiter, so turning it up can never push past -0.3 dBFS
+        const float cg = dsp::dbToLin (-cGr) * makeup.getNextValue() * output.getNextValue();
         l *= cg; r *= cg;
         limiter.process (l, r, ceiling);
-        const float out = output.getNextValue();
-        left[i] = l * out; right[i] = r * out;
+        left[i] = l; right[i] = r;
         maxGate = juce::jmax (maxGate, gGr); maxComp = juce::jmax (maxComp, cGr); minLim = juce::jmin (minLim, limiter.gain());
     }
     setReadout (gateGr, maxGate);

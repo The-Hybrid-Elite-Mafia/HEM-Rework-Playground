@@ -8,6 +8,7 @@
 #include "UI/Pages/MixPage.h"
 #include "UI/Pages/ForgePage.h"
 #include "UI/Pages/MasterPage.h"
+#include "Session/UndoHistory.h"
 
 namespace pg::ui
 {
@@ -105,6 +106,9 @@ private:
     int loadingCount = 0;
     bool openingSession = false;
     bool dirtyCached = false;
+    UndoHistory history { engine };
+    void undoRedo (bool redo);
+    bool lastPlaying = false;
     juce::TooltipWindow tooltips { this, 600 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)

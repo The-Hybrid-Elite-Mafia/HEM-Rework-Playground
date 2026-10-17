@@ -229,6 +229,7 @@ EliteEditor::EliteEditor (ElitePlugin& p)
     saveButton.onClick = [this] { savePresetAs(); };
     saveButton.setTooltip ("Save these settings as your own preset");
     rebuildPresetMenu();
+    armDoubleClickToCurrent();   // double-click goes back to how the knob was when this window opened
 
     meterShown.assign (spec.meters.size(), 0.0f);
     meterHold.assign (spec.meters.size(), 0.0f);
@@ -320,21 +321,35 @@ void EliteEditor::resized()
 
     if (! toggles.empty() || ! choices.empty())
     {
-        auto sw = p.removeFromBottom (choices.empty() ? 40.0f * U : 66.0f * U);
-        const int n = (int) (toggles.size() + choices.size());
-        const float cw = sw.getWidth() / (float) n;
-        int i = 0;
-        for (auto& t : toggles)
+        // Many switches (Elite EQ: 6 band switches + 6 type boxes) get two rows, so every type box is
+        // wide enough to show its whole name ("Low Shelf") instead of a cut-off "..".
+        const bool twoRows = toggles.size() + choices.size() > 8 && ! toggles.empty() && ! choices.empty();
+        auto layoutRow = [U] (juce::Rectangle<float> sw, std::vector<ToggleUi>* tg, std::vector<ChoiceUi>* ch)
         {
-            auto cell = juce::Rectangle<float> (sw.getX() + cw * (float) i++, sw.getY(), cw, sw.getHeight());
-            t.button->setBounds (cell.withSizeKeepingCentre (juce::jmin (cw - 6.0f * U, 240.0f * U), 34.0f * U).withY (sw.getBottom() - 38.0f * U).toNearestInt());
-        }
-        for (auto& c : choices)
+            const int n = (int) ((tg != nullptr ? tg->size() : 0) + (ch != nullptr ? ch->size() : 0));
+            const float cw = sw.getWidth() / (float) juce::jmax (1, n);
+            int i = 0;
+            if (tg != nullptr)
+                for (auto& t : *tg)
+                {
+                    auto cell = juce::Rectangle<float> (sw.getX() + cw * (float) i++, sw.getY(), cw, sw.getHeight());
+                    t.button->setBounds (cell.withSizeKeepingCentre (juce::jmin (cw - 6.0f * U, 240.0f * U), 34.0f * U).withY (sw.getBottom() - 38.0f * U).toNearestInt());
+                }
+            if (ch != nullptr)
+                for (auto& c : *ch)
+                {
+                    auto cell = juce::Rectangle<float> (sw.getX() + cw * (float) i++, sw.getY(), cw, sw.getHeight());
+                    c.labelArea = cell.withHeight (20.0f * U);
+                    c.box->setBounds (cell.withTrimmedTop (22.0f * U).withSizeKeepingCentre (juce::jmin (cw - 8.0f * U, 200.0f * U), 40.0f * U).toNearestInt());
+                }
+        };
+        if (twoRows)
         {
-            auto cell = juce::Rectangle<float> (sw.getX() + cw * (float) i++, sw.getY(), cw, sw.getHeight());
-            c.labelArea = cell.withHeight (20.0f * U);
-            c.box->setBounds (cell.withTrimmedTop (22.0f * U).withSizeKeepingCentre (juce::jmin (cw - 8.0f * U, 200.0f * U), 40.0f * U).toNearestInt());
+            layoutRow (p.removeFromBottom (66.0f * U), nullptr, &choices);
+            layoutRow (p.removeFromBottom (40.0f * U), &toggles, nullptr);
         }
+        else
+            layoutRow (p.removeFromBottom (choices.empty() ? 40.0f * U : 66.0f * U), &toggles, &choices);
         p.removeFromBottom (8.0f * U);
     }
 
@@ -509,7 +524,7 @@ void EliteEditor::paintMeters (juce::Graphics& g)
                 const float hi = lufs ? 0.0f : (m.unit == "dBTP" ? 3.0f : (m.unit == "ms" ? 2000.0f : (m.unit == "%" ? 100.0f
                                  : (corr ? 1.0f : (hz ? 20000.0f : 18.0f)))));
                 frac = shown <= -69.0f ? 0.0f : juce::jlimit (0.0f, 1.0f, (shown - lo) / (hi - lo));
-                text = shown <= -69.0f ? "--" : juce::String (shown, m.unit == "ms" ? 0 : (corr ? 2 : 1));
+                text = shown <= -69.0f ? "--" : (m.unit == "ms" ? juce::String (juce::roundToInt (shown)) : juce::String (shown, corr ? 2 : 1));
                 if (corr) c = shown > 0.6f ? colours::hemGreen : (shown > 0.2f ? kAmber : colours::meterRed);
                 if (hz) { text = shown < 1.0f ? juce::String ("--") : juce::String (shown / 1000.0f, 1) + "k"; c = kAmber; }
                 if (m.unit == "dBTP" && shown > -1.0f) c = colours::meterRed;
@@ -625,7 +640,7 @@ void EliteEditor::presetChosen()
     }
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<EliteEditor> (this)]
     {
-        if (safe != nullptr) safe->rebuildPresetMenu();
+        if (safe != nullptr) { safe->armDoubleClickToCurrent(); safe->rebuildPresetMenu(); }
     });
 }
 
@@ -642,7 +657,15 @@ void EliteEditor::stepPreset (int delta)
     if (idx < (int) factory.size()) Presets::apply (plugin, factory[(size_t) idx]);
     else Presets::loadUser (plugin, all[idx]);
     currentPreset = all[idx];
+    armDoubleClickToCurrent();
     rebuildPresetMenu();
+}
+
+void EliteEditor::armDoubleClickToCurrent()
+{
+    for (auto& k : knobs)
+        if (k.slider != nullptr && k.param != nullptr)
+            k.slider->setDoubleClickReturnValue (true, k.param->convertFrom0to1 (k.param->getValue()));
 }
 
 void EliteEditor::savePresetAs()
@@ -660,6 +683,7 @@ void EliteEditor::savePresetAs()
         if (Presets::saveUser (safe->plugin, name))
         {
             safe->currentPreset = juce::File::createLegalFileName (name);
+            safe->armDoubleClickToCurrent();
             safe->rebuildPresetMenu();
         }
     }), true);

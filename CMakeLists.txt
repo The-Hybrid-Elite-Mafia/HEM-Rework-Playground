@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(HEMPlayground VERSION 0.6.0 LANGUAGES C CXX)
+project(HEMPlayground VERSION 0.7.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,13 +40,15 @@ set(PG_CORE_SOURCES
     Source/Engine/SincResampler.cpp
     Source/Engine/Exporter.cpp
     Source/Session/SessionFile.cpp
+    Source/Session/UndoHistory.cpp
     Source/Band/BandTypes.cpp
     Source/Band/BandComposer.cpp
     Source/Band/BandInstruments.cpp
     Source/Band/BandRender.cpp
     Source/Band/BandSampler.cpp
     Source/Library/AudioFacts.cpp
-    Source/Library/Library.cpp)
+    Source/Library/Library.cpp
+    Source/Analysis/Waterfall.cpp)
 
 set(PG_JUCE_MODULES
     juce::juce_audio_utils
@@ -78,7 +80,8 @@ set(PG_UI_SOURCES
     Source/UI/FaceplateKit.cpp
     Source/UI/PlaygroundLookAndFeel.cpp
     Source/UI/Editors/EliteEditor.cpp
-    Source/UI/Editors/SwirlEditor.cpp)
+    Source/UI/Editors/SwirlEditor.cpp
+    Source/UI/Spectrum3D.cpp)
 
 set(PG_APP_SOURCES
     Source/SongForge/AceStepClient.cpp

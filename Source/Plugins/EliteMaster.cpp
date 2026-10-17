@@ -9,7 +9,7 @@ namespace
     juce::AudioProcessorValueTreeState::ParameterLayout masterLayout()
     {
         params::Layout l;
-        params::addDb (l, "input", "Input", 0.0f, 18.0f, 0.0f);
+        params::addDb (l, "input", "Input", -12.0f, 18.0f, 0.0f);   // below 0 so Match Target can also turn a hot mix DOWN
         params::addDb (l, "ceiling", "Ceiling", -3.0f, 0.0f, -1.0f);
         params::addMs (l, "release", "Release", 10.0f, 1000.0f, 80.0f);
         params::addChoice (l, "character", "Character", EliteMaster::characters(), 0);
@@ -54,7 +54,7 @@ bool EliteMaster::matchTarget()
     if (integratedNow <= -70.0f) return false;
     const float tgt = targetLufs ((int) pTarget->load());
     auto* p = apvts.getParameter ("input");
-    const float next = juce::jlimit (0.0f, 18.0f, pInput->load() + (tgt - integratedNow));
+    const float next = juce::jlimit (-12.0f, 18.0f, pInput->load() + (tgt - integratedNow));
     p->setValueNotifyingHost (p->convertTo0to1 (next));
     resetMeters();
     return true;
@@ -106,6 +106,6 @@ void EliteMaster::processDsp (float* left, float* right, int n) noexcept
     setReadout (integrated, loudness.getIntegrated());
     setReadout (truePeak, params::gainToDb (tpMeter.get()));
     const float integ = loudness.getIntegrated();
-    setReadout (suggestedInput, integ > -70.0f ? juce::jlimit (0.0f, 18.0f, param (pInput) + (targetLufs ((int) param (pTarget)) - integ)) : param (pInput));
+    setReadout (suggestedInput, integ > -70.0f ? juce::jlimit (-12.0f, 18.0f, param (pInput) + (targetLufs ((int) param (pTarget)) - integ)) : param (pInput));
 }
 } // namespace pg

@@ -2,6 +2,7 @@
 
 #include "UI/Pages/MixPage.h"
 #include "Engine/Exporter.h"
+#include "UI/Spectrum3D.h"
 
 namespace pg::ui
 {
@@ -15,6 +16,8 @@ public:
     void paint (juce::Graphics&) override;
     void rebuild();
     void startExport();
+    void runExport (const juce::File& target);
+    void visibilityChanged() override;
     bool isExporting() const noexcept { return job != nullptr; }
     void setSongName (const juce::String& n) { if (fileName.getText().isEmpty() || fileName.getText() == lastAutoName) fileName.setText (lastAutoName = n + " - master", false); }
 
@@ -38,11 +41,12 @@ private:
     juce::ComboBox finish, bits, rate;
     juce::Slider tail;
     juce::ToggleButton beforeVersion { "BEFORE VERSION (plugins off)" };
-    juce::Rectangle<int> slotsArea, loudArea, exportArea;
+    juce::Rectangle<int> slotsArea, loudArea, exportArea, scopeArea;
     std::unique_ptr<ExportJob> job;
     double progress = 0.0;
     juce::String exportMessage, lastAutoName;
     juce::File lastExport;
     Guide guide;
+    Spectrum3D spectrum { ctx.engine };   // the 3D meter (after ctx: it needs the engine)
 };
 } // namespace pg::ui

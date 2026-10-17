@@ -273,7 +273,7 @@ namespace params
                                                                 .withStringFromValueFunction ([] (float v, int)
                                                                 {
                                                                     return v >= 1000.0f ? juce::String (v / 1000.0f, 2) + " s"
-                                                                                        : juce::String (v, v < 10.0f ? 1 : 0) + " ms";
+                                                                                        : (v < 10.0f ? juce::String (v, 1) : juce::String (juce::roundToInt (v))) + " ms";   // String (x, 0) would print every digit
                                                                 })));
     }
 

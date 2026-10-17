@@ -3,6 +3,9 @@
 // and zero allocation on the audio thread.
 
 #include "Engine/PlaygroundEngine.h"
+#include "Session/UndoHistory.h"
+#include "Analysis/Waterfall.h"
+#include "Engine/MediaLoader.h"
 #include <juce_core/juce_core.h>
 
 namespace hemtest { void beginTracking(); int endTracking(); }
@@ -149,6 +152,96 @@ public:
             out = render (*e, 0.1);
             expectWithinAbsoluteError (last (out, 0), 0.4f * params::dbToGain (-6.0f), 1.0e-4f);
         }
+
+        beginTest ("master fader drives Elite Master: +6 dB on a hot mix still never passes the ceiling");
+        {
+            auto e = makeEngine();
+            e->addTrack (sine (220.0, 0.8f, 3.0, kFs), "Hot");
+            expect (e->insertPlugin (E::kMaster, E::kSlots - 1, "elite-master") != nullptr);
+            set (*e, E::Ids::masterVol, 6.0f);
+            e->play();
+            auto out = render (*e, 1.5);
+            const float pk = out.getMagnitude (0, (int) kFs / 2, out.getNumSamples() - (int) kFs / 2);
+            expectLessThan (pk, params::dbToGain (-1.0f) + 1.0e-3f, "master fader pushed the export past Elite Master's ceiling");
+            expectGreaterThan (pk, params::dbToGain (-1.5f), "the limiter should be working right up at the ceiling");
+            expect (e->getPeak (E::kMaster, 0) <= params::dbToGain (-1.0f) + 1.0e-3f, "master meter shows the limited level");
+        }
+
+        beginTest ("master tap: the 3D meter gets the master output (mono sum) only while it is switched on");
+        {
+            auto e = makeEngine();
+            e->addTrack (constant (0.5f, 0.25f, 2.0), "Tap");
+            e->play();
+            std::vector<float> got ((size_t) E::kTapSize);
+            render (*e, 0.05);
+            expectEquals (e->readMasterTap (got.data(), (int) got.size()), 0);
+            e->setMasterTapActive (true);
+            render (*e, 0.1);
+            const int n = e->readMasterTap (got.data(), (int) got.size());
+            expectEquals (n, (int) (0.1 * kFs));
+            expectWithinAbsoluteError (got[(size_t) n - 1], 0.375f, 1.0e-5f);
+            juce::AudioBuffer<float> buf (2, kBlock);
+            juce::MidiBuffer midi;
+            int allocations = 0;
+            for (int i = 0; i < 40; ++i)
+            {
+                hemtest::beginTracking();
+                e->processBlock (buf, midi);
+                allocations += hemtest::endTracking();
+            }
+            expectEquals (allocations, 0, "the tap must not allocate on the audio thread");
+        }
+
+        beginTest ("undo / redo: a fader move, then a removed track comes back with its audio");
+        {
+            auto e = makeEngine();
+            const auto kickPath = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("pg-undo-kick.wav").getFullPathName();
+            const int t = e->addTrack (constant (0.5f, 0.5f, 2.0, kFs, kickPath), "Kick");
+            UndoHistory h (*e, 2);
+            h.reset();
+            expect (! h.canUndo());
+            set (*e, E::Ids::track (t, "vol"), -6.0f);
+            for (int i = 0; i < 3; ++i) h.poll();
+            expect (h.canUndo(), "a settled fader move is one undo step");
+            expect (h.undo());
+            expect (! h.lastRestoreWasStructural());
+            expectWithinAbsoluteError (e->getAPVTS().getRawParameterValue (E::Ids::track (t, "vol"))->load(), 0.0f, 0.01f);
+            expect (h.redo());
+            expectWithinAbsoluteError (e->getAPVTS().getRawParameterValue (E::Ids::track (t, "vol"))->load(), -6.0f, 0.01f);
+
+            e->removeTrack (t);
+            for (int i = 0; i < 3; ++i) h.poll();
+            expect (! e->isTrackUsed (t));
+            expect (h.undo());
+            expect (h.lastRestoreWasStructural());
+            expect (e->isTrackUsed (t), "undo brings the removed track back");
+            expect (e->getTrackMedia (t) != nullptr, "... with its audio, without reading the disk");
+            expectEquals (e->getTrackName (t), juce::String ("Kick"));
+            expectWithinAbsoluteError (e->getAPVTS().getRawParameterValue (E::Ids::track (t, "vol"))->load(), -6.0f, 0.01f);
+            h.undo();   // one more step back (fader to 0 dB) must also work
+            expectWithinAbsoluteError (e->getAPVTS().getRawParameterValue (E::Ids::track (t, "vol"))->load(), 0.0f, 0.01f);
+        }
+
+        beginTest ("3D spectrum: a full-scale 1 kHz sine peaks at about 0 dB at 1 kHz, far below it elsewhere");
+        {
+            analysis::Waterfall w;
+            w.prepare (kFs);
+            std::vector<float> x ((size_t) kFs);
+            for (size_t i = 0; i < x.size(); ++i) x[i] = (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * (double) i / kFs);
+            w.add (x.data(), (int) x.size());
+            expectGreaterThan ((int) w.rowsMade(), 20);
+            const float* r = w.row (0);
+            int best = 0;
+            for (int i = 1; i < analysis::Waterfall::kPoints; ++i) if (r[i] > r[best]) best = i;
+            expectWithinAbsoluteError (analysis::Waterfall::pointHz (best), 1000.0f, 70.0f);
+            expectWithinAbsoluteError (r[best], 0.0f, 1.5f);
+            int far = 0;
+            for (int i = 0; i < analysis::Waterfall::kPoints; ++i) if (analysis::Waterfall::pointHz (i) < 300.0f && r[i] > -60.0f) ++far;
+            expectEquals (far, 0, "energy below 300 Hz from a 1 kHz tone");
+        }
+
+        beginTest ("import: MP3 is in the open-file list");
+        expect (MediaLoader::wildcard().containsIgnoreCase ("*.mp3"), MediaLoader::wildcard());
 
         beginTest ("sends are post-fader and follow mute; they add to the dry path");
         {

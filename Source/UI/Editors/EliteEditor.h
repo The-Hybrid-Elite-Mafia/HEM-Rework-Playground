@@ -94,6 +94,8 @@ private:
     void presetChosen();
     void stepPreset (int delta);
     void savePresetAs();
+    /** Double-click on a knob returns it to the value of the preset that is loaded (not the factory default). */
+    void armDoubleClickToCurrent();
     float u() const noexcept { return (float) getWidth() / (float) spec.width; }
 
     juce::Image background;

@@ -435,20 +435,43 @@ void PlaygroundEngine::processChunk (juce::int64 pos, bool play, int n) noexcept
     }
 
     //------------------------------------------------------------------ master
+    // The master fader sits BEFORE the master inserts, so Elite Master's limiter is always the last
+    // thing the signal sees: pushing the fader up drives the limiter, it can never push past the ceiling.
     auto& m = strips[(size_t) kMaster];
-    runInserts (m, ml, mr, n);
     const float g = faderGain (m.vol->load (std::memory_order_relaxed));
     m.gainL.setTargetValue (g);
-    float pl = 0.0f, pr = 0.0f;
     for (int i = 0; i < n; ++i)
     {
         const float gg = m.gainL.getNextValue();
         ml[i] *= gg; mr[i] *= gg;
+    }
+    runInserts (m, ml, mr, n);
+    float pl = 0.0f, pr = 0.0f;
+    for (int i = 0; i < n; ++i)
+    {
         pl = juce::jmax (pl, std::abs (ml[i])); pr = juce::jmax (pr, std::abs (mr[i]));
     }
     meters[(size_t) kMaster][0].store (pl, std::memory_order_relaxed);
     meters[(size_t) kMaster][1].store (pr, std::memory_order_relaxed);
+    if (tapActive.load (std::memory_order_relaxed))
+    {
+        int s1, n1, s2, n2;
+        tapFifo.prepareToWrite (n, s1, n1, s2, n2);
+        for (int i = 0; i < n1; ++i) tapData[(size_t) (s1 + i)] = 0.5f * (ml[i] + mr[i]);
+        for (int i = 0; i < n2; ++i) tapData[(size_t) (s2 + i)] = 0.5f * (ml[n1 + i] + mr[n1 + i]);
+        tapFifo.finishedWrite (n1 + n2);
+    }
     linePos = (linePos + n) % len;
+}
+
+int PlaygroundEngine::readMasterTap (float* dest, int maxSamples) noexcept
+{
+    int s1, n1, s2, n2;
+    tapFifo.prepareToRead (maxSamples, s1, n1, s2, n2);
+    std::copy (tapData.begin() + s1, tapData.begin() + s1 + n1, dest);
+    std::copy (tapData.begin() + s2, tapData.begin() + s2 + n2, dest + n1);
+    tapFifo.finishedRead (n1 + n2);
+    return n1 + n2;
 }
 
 void PlaygroundEngine::delayInPlace (float* line, int len, int writePos, float* io, int n, int d) noexcept

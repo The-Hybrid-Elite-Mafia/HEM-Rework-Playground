@@ -1,7 +1,23 @@
 #include "AceStepClient.h"
+#include "../Engine/MediaLoader.h"
+#include "../Library/AudioFacts.h"
 
 namespace pg::ace
 {
+double measuredOrReported (const juce::File& audioFile, double reportedBpm)
+{
+    juce::String err;
+    const auto data = MediaLoader::decode (audioFile, err);
+    if (data == nullptr || data->isEmpty()) return reportedBpm;
+    const auto facts = library::measure (data->getBuffer(), data->getSourceRate());
+    if (facts.bpm <= 0.0) return reportedBpm;
+    // if ACE-Step's number is the same tempo (or exactly double / half of it), keep its round number
+    for (const double k : { 1.0, 2.0, 0.5 })
+        if (reportedBpm > 0.0 && std::abs (reportedBpm * k - facts.bpm) <= facts.bpm * 0.03)
+            return reportedBpm * k;
+    return facts.bpm;
+}
+
 namespace
 {
     juce::var dataOf (const juce::var& root)
@@ -270,6 +286,10 @@ void Job::run()
             return;
         }
         t.file = dest;
+        // ACE-Step's "bpm" is what its language model planned, not what the audio does (a take it called
+        // 36 BPM measured about 89). Measure the downloaded audio and trust the measurement.
+        report ("Measuring take " + juce::String (i + 1) + "...");
+        t.bpm = measuredOrReported (dest, t.bpm);
         result.takes.add (t);
     }
     // keep what was asked for next to the audio

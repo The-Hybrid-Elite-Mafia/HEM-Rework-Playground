@@ -42,6 +42,10 @@ juce::String buildReleaseBody (const Request&);
 /** data.task_id from a /release_task reply. False + message when the server refused. */
 bool parseRelease (const juce::String& replyBody, juce::String& taskId, juce::String& error);
 
+/** Tempo of a downloaded take: measured from the audio; ACE-Step's own number only when it agrees
+    (same tempo, or exactly double / half). Falls back to the reported number if the file can't be read. */
+double measuredOrReported (const juce::File& audioFile, double reportedBpm);
+
 struct Take
 {
     juce::String url;            // "/v1/audio?path=..." (relative to the server)

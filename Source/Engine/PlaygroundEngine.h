@@ -13,7 +13,7 @@ namespace pg
         32 TRACKS  (stem / WAV player -> 8 inserts -> fader + pan -> output: master or a bus,
                     plus two post-fader sends to any bus)
          6 BUSES   (sum -> 8 inserts -> fader + pan -> master)
-         1 MASTER  (sum -> 8 inserts -> fader -> device / export)
+         1 MASTER  (sum -> fader -> 8 inserts -> device / export; the fader drives the limiter)
 
     Strips are addressed by one index: tracks 0..31, buses 32..37, master 38.
 
@@ -145,6 +145,14 @@ public:
     void setMasterInsertsBypassed (bool off) noexcept { masterInsertsOff.store (off); }
     bool isBeforeMode() const noexcept { return beforeMode.load(); }
 
+    //============================================================================== master tap (3D analyzer)
+    /** While active, the audio thread copies the master output (mono sum) into a lock-free FIFO.
+        When the FIFO is full the newest samples are dropped; nothing waits. */
+    static constexpr int kTapSize = 1 << 15;
+    void setMasterTapActive (bool on) noexcept { tapActive.store (on, std::memory_order_relaxed); }
+    /** UI thread: takes up to maxSamples samples out of the tap. Returns how many. */
+    int readMasterTap (float* dest, int maxSamples) noexcept;
+
     //============================================================================== meters (UI reads)
     float getPeak (int strip, int channel) const noexcept { return meters[(size_t) strip][(size_t) channel].load (std::memory_order_relaxed); }
 
@@ -213,6 +221,9 @@ private:
 
     std::atomic<bool> playing { false }, loopOn { false }, stopAtEnd { true }, beforeMode { false }, masterInsertsOff { false };
     std::atomic<juce::int64> position { 0 };          // engine samples
+    std::atomic<bool> tapActive { false };
+    juce::AbstractFifo tapFifo { kTapSize };
+    std::vector<float> tapData = std::vector<float> ((size_t) kTapSize, 0.0f);
     std::atomic<double> locateRequest { -1.0 };       // seconds, -1 = none
     std::atomic<double> loopStart { 0.0 }, loopEnd { 0.0 }, songLength { 0.0 };
 
