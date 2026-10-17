@@ -59,6 +59,8 @@ protected:
     /** Called by the 30 Hz UI timer (pull display data here). */
     virtual void tick() {}
     juce::Rectangle<float> getDisplayArea() const noexcept { return displayArea; }
+    /** Design-pixel scale: window width / design width. */
+    float u() const noexcept { return (float) getWidth() / (float) spec.width; }
 
     ElitePlugin& plugin;
     EditorSpec spec;
@@ -96,7 +98,6 @@ private:
     void savePresetAs();
     /** Double-click on a knob returns it to the value of the preset that is loaded (not the factory default). */
     void armDoubleClickToCurrent();
-    float u() const noexcept { return (float) getWidth() / (float) spec.width; }
 
     juce::Image background;
     juce::Image logo;

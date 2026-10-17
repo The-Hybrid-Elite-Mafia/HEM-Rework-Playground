@@ -1,4 +1,5 @@
 #include "ElitePlugins.h"
+#include <complex>
 
 namespace pg
 {
@@ -73,6 +74,21 @@ int EliteEq::bandCoeffs (int band, double fs, BiquadCoeffs out[2]) const
     const auto& p = bp[(size_t) band];
     if (p.on->load() < 0.5f) return 0;
     return design (kindOf (band, (int) p.type->load()), fs, p.freq->load(), p.gain->load(), p.q->load(), out);
+}
+
+float EliteEq::responseDb (double fs, double hz) const
+{
+    const double w = 2.0 * juce::MathConstants<double>::pi * juce::jlimit (1.0, fs * 0.499, hz) / fs;
+    const std::complex<double> z1 = std::polar (1.0, -w), z2 = z1 * z1;
+    double db = 0.0;
+    for (int b = 0; b < kBands; ++b)
+    {
+        BiquadCoeffs c[2];
+        const int n = bandCoeffs (b, fs, c);
+        for (int s = 0; s < n; ++s)
+            db += 20.0 * std::log10 (juce::jmax (1.0e-9, std::abs ((c[s].b0 + c[s].b1 * z1 + c[s].b2 * z2) / (1.0 + c[s].a1 * z1 + c[s].a2 * z2))));
+    }
+    return (float) db + pOutput->load();
 }
 
 void EliteEq::prepareDsp (double, int)

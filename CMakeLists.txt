@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(HEMPlayground VERSION 0.7.2 LANGUAGES C CXX)
+project(HEMPlayground VERSION 0.8.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -81,6 +81,7 @@ set(PG_UI_SOURCES
     Source/UI/PlaygroundLookAndFeel.cpp
     Source/UI/Editors/EliteEditor.cpp
     Source/UI/Editors/SwirlEditor.cpp
+    Source/UI/Editors/EqEditor.cpp
     Source/UI/Spectrum3D.cpp)
 
 set(PG_APP_SOURCES

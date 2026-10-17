@@ -1,5 +1,6 @@
 #include "EliteEditor.h"
 #include "SwirlEditor.h"
+#include "EqEditor.h"
 #include "PlaygroundBinaryData.h"
 
 namespace pg::ui
@@ -92,7 +93,7 @@ EditorSpec EditorSpec::forPlugin (ElitePlugin& p)
         gain.push_back ({ "output", "OUTPUT" });
         s.knobRows = { freq, gain, q };
         s.meters = { { "IN", M::inputPeak }, { "OUT", M::outputPeak } };
-        s.width = 1180; s.height = 940;
+        s.width = 1180; s.height = 1120;   // room for the analyzer + curve and the two switch rows
     }
     else if (id == "elite-verb")
     {
@@ -144,6 +145,7 @@ void EliteEditor::install()
     ElitePlugin::editorFactory = [] (ElitePlugin& p) -> juce::AudioProcessorEditor*
     {
         if (auto* sw = dynamic_cast<EliteSwirl*> (&p)) return new SwirlEditor (*sw);
+        if (auto* eq = dynamic_cast<EliteEq*> (&p)) return new EqEditor (*eq);
         return new EliteEditor (p);
     };
 }

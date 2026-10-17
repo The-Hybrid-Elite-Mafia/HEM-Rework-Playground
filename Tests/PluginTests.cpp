@@ -293,6 +293,23 @@ public:
             expectEquals (static_cast<EliteEq&> (*p).bandCoeffs (0, kFs, c), 2);
         }
 
+        beginTest ("Elite EQ: the curve drawn in the window matches what the EQ really does");
+        {
+            auto p = make ("elite-eq");
+            auto& eq = dynamic_cast<EliteEq&> (*p);
+            set (*p, EliteEq::id (2, "gain").toRawUTF8(), 6.0f); set (*p, EliteEq::id (2, "freq").toRawUTF8(), 1000.0f);
+            set (*p, EliteEq::id (4, "type").toRawUTF8(), 2.0f); set (*p, EliteEq::id (4, "gain").toRawUTF8(), -4.0f); set (*p, EliteEq::id (4, "freq").toRawUTF8(), 6000.0f);
+            set (*p, EliteEq::id (0, "type").toRawUTF8(), 0.0f); set (*p, EliteEq::id (0, "freq").toRawUTF8(), 80.0f);   // low cut
+            set (*p, "output", -2.0f);
+            for (double hz : { 50.0, 200.0, 1000.0, 3000.0, 9000.0 })
+            {
+                auto s = sine ((int) kFs, hz, 0.25f);
+                run (*p, s);
+                const double measured = db (rms (s.l, (int) kFs / 2) * std::sqrt (2.0) / 0.25);
+                expectWithinAbsoluteError ((double) eq.responseDb (kFs, hz), measured, 0.3, "curve vs audio at " + juce::String (hz) + " Hz");
+            }
+        }
+
         beginTest ("Elite Comp: reduces a loud signal by about (1 - 1/ratio) of the overshoot, MIX blends");
         {
             auto p = make ("elite-comp");
@@ -424,6 +441,42 @@ public:
             expectWithinAbsoluteError (at - 100, 24000, 2);
             expectWithinAbsoluteError (p->getReadout (EliteDelay::delayMs), 500.0f, 1.0f);
             expectWithinAbsoluteError (EliteDelay::divisionBeats (8), 1.0, 1.0e-9);
+        }
+
+        beginTest ("Elite Delay: PING-PONG 100 bounces the echoes left, right, left");
+        {
+            auto p = make ("elite-delay");
+            set (*p, "sync", 0.0f); set (*p, "time", 100.0f); set (*p, "pingpong", 100.0f);
+            set (*p, "mix", 100.0f); set (*p, "feedback", 60.0f); set (*p, "lowcut", 20.0f); set (*p, "highcut", 20000.0f);
+            p->prepareToPlay (kFs, kBlock);
+            Stereo s ((int) kFs);
+            s.l[100] = s.r[100] = 0.5f;
+            run (*p, s);
+            auto energy = [&s] (const std::vector<float>& x, int echo)
+            {
+                const int c = 100 + echo * (int) (0.1 * kFs);
+                double e = 0.0;
+                for (int i = c - 200; i < c + 200; ++i) e += (double) x[(size_t) i] * x[(size_t) i];
+                return e;
+            };
+            expectGreaterThan (energy (s.l, 1), 100.0 * energy (s.r, 1), "1st echo should be on the left");
+            expectGreaterThan (energy (s.r, 2), 100.0 * energy (s.l, 2), "2nd echo should be on the right");
+            expectGreaterThan (energy (s.l, 3), 100.0 * energy (s.r, 3), "3rd echo should be on the left");
+        }
+
+        beginTest ("Elite Delay: PING-PONG 0 keeps a stereo echo stereo (left stays left)");
+        {
+            auto p = make ("elite-delay");
+            set (*p, "sync", 0.0f); set (*p, "time", 100.0f); set (*p, "pingpong", 0.0f);
+            set (*p, "mix", 100.0f); set (*p, "feedback", 60.0f); set (*p, "lowcut", 20.0f); set (*p, "highcut", 20000.0f);
+            p->prepareToPlay (kFs, kBlock);
+            Stereo s ((int) kFs);
+            s.l[100] = 0.5f;   // left only
+            run (*p, s);
+            double el = 0.0, er = 0.0;
+            for (size_t i = 200; i < s.l.size(); ++i) { el += (double) s.l[i] * s.l[i]; er += (double) s.r[i] * s.r[i]; }
+            expectGreaterThan (el, 0.01);
+            expectLessThan (er, el * 1.0e-6, "nothing should leak to the right");
         }
 
         beginTest ("Elite Master: never exceeds the ceiling; LUFS of a -20 dBFS 1 kHz stereo sine reads about -20");

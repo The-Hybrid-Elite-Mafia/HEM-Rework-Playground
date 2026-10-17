@@ -51,6 +51,8 @@ public:
 
     /** Message thread (UI curve): the 1-2 biquads of a band for the current parameters. Returns stages (0 = band off / flat). */
     int bandCoeffs (int band, double sampleRate, BiquadCoeffs out[2]) const;
+    /** Message thread (UI curve): what the EQ does at `hz` in dB for the current settings, all bands + OUTPUT. */
+    float responseDb (double sampleRate, double hz) const;
     static juce::String id (int band, const char* what) { return "b" + juce::String (band + 1) + "_" + what; }
 
 protected:
