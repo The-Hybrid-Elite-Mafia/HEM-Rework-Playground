@@ -16,6 +16,9 @@ struct ExportOptions
         mastering engineer or another app to finish. */
     bool clean = false;
     static constexpr float kCleanPeakDb = -3.0f;
+    /** > 0: write an MP3 at this bitrate instead of a WAV (the mix is rendered to a 16-bit WAV first,
+        then encoded by Windows' own MP3 encoder). The sample rate must be 44.1 or 48 kHz. */
+    int mp3Kbps = 0;
 };
 
 /**
@@ -28,6 +31,8 @@ public:
     OfflineExport (const juce::ValueTree& session, const std::map<juce::String, SampleData::Ptr>& media, ExportOptions);
 
     bool render (const std::function<void (double)>& progress, const std::function<bool()>& shouldCancel, juce::String& error);
+    /** The file render() writes: options.file with .wav or .mp3. */
+    juce::File getTargetFile() const { return options.file.withFileExtension (options.mp3Kbps > 0 ? ".mp3" : ".wav"); }
 
     juce::int64 getLengthSamples() const noexcept { return lengthSamples; }
     /** Highest output sample written (after render); > 1 means the file clips. */
@@ -36,6 +41,8 @@ public:
     float getCleanGain() const noexcept { return cleanGain; }
 
 private:
+    bool renderWav (const juce::File& target, const std::function<void (double)>& progress, const std::function<bool()>& shouldCancel, juce::String& error);
+
     PlaygroundEngine engine;
     ExportOptions options;
     juce::int64 lengthSamples = 0;

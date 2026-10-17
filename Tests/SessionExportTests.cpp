@@ -230,6 +230,50 @@ public:
                 expectWithinAbsoluteError (qOut.getSample (0, 10000), 0.1f, 0.002f);
             }
 
+           #if JUCE_WINDOWS
+            beginTest ("export: MP3 (Windows' encoder): right length, right level, about 320 kbps, no WAV left behind");
+            {
+                ExportOptions om = o;
+                om.file = dir.getChildFile ("export/mix.mp3");
+                om.mp3Kbps = 320;
+                OfflineExport exm (session2, media, om);
+                double lastP = 0.0;
+                const bool ok = exm.render ([&] (double p) { lastP = p; }, {}, err);
+                expect (ok, "MP3 export failed: " + err);
+                if (ok)
+                {
+                    const auto mp3 = exm.getTargetFile();
+                    expect (mp3.existsAsFile());
+                    expectWithinAbsoluteError (lastP, 1.0, 1.0e-9);
+                    expect (! mp3.getSiblingFile ("mix (making mp3).wav").existsAsFile(), "temporary WAV left behind");
+                    // 1.5 s at 320 kbps = 60 kB (+ encoder delay / padding / header)
+                    const auto bytes = mp3.getSize();
+                    expect (bytes > 45000 && bytes < 90000, "MP3 size " + juce::String (bytes));
+                    juce::AudioFormatManager fm;
+                    fm.registerBasicFormats();
+                    std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (mp3));
+                    expect (r != nullptr, "the MP3 cannot be read back");
+                    if (r != nullptr)
+                    {
+                        expectEquals (r->sampleRate, 48000.0);
+                        const double secs = (double) r->lengthInSamples / r->sampleRate;
+                        expectWithinAbsoluteError (secs, 1.5, 0.1, "MP3 length");
+                        juce::AudioBuffer<float> back (2, (int) r->lengthInSamples);
+                        r->read (&back, 0, back.getNumSamples(), 0, true, true);
+                        // same loudness as the WAV export of the same mix (within 0.5 dB)
+                        const float wavRms = out.getRMSLevel (0, 0, out.getNumSamples());
+                        const float mp3Rms = back.getRMSLevel (0, 0, back.getNumSamples());
+                        expectWithinAbsoluteError ((double) params::gainToDb (mp3Rms), (double) params::gainToDb (wavRms), 0.5, "MP3 level vs WAV");
+                    }
+                }
+                ExportOptions om96 = om;
+                om96.sampleRate = 96000.0;
+                om96.file = dir.getChildFile ("export/mix96.mp3");
+                OfflineExport exb (session2, media, om96);
+                expect (! exb.render ({}, {}, err) && err.contains ("44.1 or 48"), "96 kHz MP3 must be refused with a clear message");
+            }
+           #endif
+
             ExportOptions oc = o;
             oc.file = dir.getChildFile ("export/cancelled.wav");
             OfflineExport ex4 (session2, media, oc);

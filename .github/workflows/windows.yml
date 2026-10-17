@@ -49,6 +49,13 @@ jobs:
           name: SoundPack-build-report
           path: soundpack/BUILD-REPORT.txt
 
+      - name: Make sure Windows' MP3 encoder (Media Foundation) is present on the build server
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $f = Get-WindowsFeature Server-Media-Foundation -ErrorAction SilentlyContinue
+          if ($f -and -not $f.Installed) { Install-WindowsFeature Server-Media-Foundation | Out-Host } else { "Media Foundation: $($f.InstallState)" }
+
       - name: Run the unit tests
         shell: cmd
         env:

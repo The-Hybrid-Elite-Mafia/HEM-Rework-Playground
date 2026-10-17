@@ -19,7 +19,7 @@ namespace
 
     enum MenuIds
     {
-        mNew = 1, mOpen, mSave, mSaveAs, mImport, mExport, mAudio, mQuit, mClearRecent,
+        mNew = 1, mOpen, mSave, mSaveAs, mImport, mExport, mAudio, mQuit, mClearRecent, mExportMp3,
         mRename = 20, mRemoveTrack, mClearSolo, mClearMute, mResetFader,
         mUndo = 30, mRedo,
         mTabEdit = 40, mTabMix, mTabForge, mTabMaster, mZoomIn, mZoomOut, mFit, mCloseWindows,
@@ -381,7 +381,8 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     if (k == juce::KeyPress ('o', cmd, 0)) { checkSaveThen ([this] { openDialog(); }); return true; }
     if (k == juce::KeyPress ('n', cmd, 0)) { checkSaveThen ([this] { newSession(); }); return true; }
     if (k == juce::KeyPress ('i', cmd, 0)) { trackList->setVisible (true); menuItemSelected (mImport, 0); return true; }
-    if (k == juce::KeyPress ('e', cmd, 0)) { transport[5]->triggerClick(); return true; }
+    if (k == juce::KeyPress ('e', cmd, 0)) { menuItemSelected (mExport, 0); return true; }
+    if (k == juce::KeyPress ('e', cmd | juce::ModifierKeys::shiftModifier, 0)) { menuItemSelected (mExportMp3, 0); return true; }
     for (int i = 0; i < tabs::count; ++i)
         if (k == juce::KeyPress ('1' + i, cmd, 0)) { showTab (i); return true; }
     return false;
@@ -409,6 +410,7 @@ juce::PopupMenu MainComponent::getMenuForIndex (int index, const juce::String&)
             m.addSeparator();
             m.addItem (mImport, "Import Audio (stems)...   Ctrl+I");
             m.addItem (mExport, "Export WAV...   Ctrl+E");
+            m.addItem (mExportMp3, "Export MP3...   Ctrl+Shift+E");
             m.addSeparator();
             m.addItem (mAudio, "Audio Settings (sound card)...");
             m.addSeparator();
@@ -491,7 +493,8 @@ void MainComponent::menuItemSelected (int id, int)
                                   [safe, chooser] (const juce::FileChooser& fc) { if (safe != nullptr && ! fc.getResults().isEmpty()) safe->importFiles (fc.getResults()); });
             break;
         }
-        case mExport: transport[5]->triggerClick(); break;
+        case mExport: showTab (tabs::master); masterPage->exportWithDialog (false); break;
+        case mExportMp3: showTab (tabs::master); masterPage->exportWithDialog (true); break;
         case mAudio: showAudioSettings(); break;
         case mQuit: juce::JUCEApplication::getInstance()->systemRequestedQuit(); break;
         case mRename:
@@ -728,6 +731,7 @@ void MainComponent::newSession()
     editView.scrollY = 0;
     markSaved();
     history.reset();
+    masterPage->resetFileName (songName());
     refreshAll();
     status ("New session: Elite Verb is on the Reverb bus, Elite Delay on the Delay bus, Elite Master on the master.");
 }
@@ -770,6 +774,7 @@ void MainComponent::openSession (const juce::File& file)
             safe->editView.scrollY = 0;
             safe->markSaved();
             safe->history.reset();
+            safe->masterPage->resetFileName (safe->songName());
             safe->refreshAll();
             safe->status (missing.isEmpty() ? "Opened " + file.getFileName()
                                             : "Opened " + file.getFileName() + "  -  " + juce::String (missing.size()) + " audio file(s) not found: "

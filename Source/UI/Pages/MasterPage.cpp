@@ -1,4 +1,5 @@
 #include "MasterPage.h"
+#include "Engine/Mp3Encoder.h"
 
 namespace pg::ui
 {
@@ -104,9 +105,11 @@ MasterPage::MasterPage (AppContext& c) : ctx (c)
             if (safe != nullptr && fc.getResult() != juce::File()) { safe->ctx.settings.setValue ("exportFolder", fc.getResult().getFullPathName()); safe->repaint(); }
         });
     };
-    exportButton.onClick = [this] { if (job != nullptr) job->cancel.store (true); else startExport(); };
+    exportButton.onClick = [this] { if (job != nullptr) job->cancel.store (true); else startExport (false); };
+    mp3Button.onClick = [this] { if (job == nullptr) startExport (true); };
+    mp3Button.setTooltip ("MP3, 320 kbps (made by the MP3 encoder built into Windows). Uses 44.1 kHz if picked, otherwise 48 kHz.");
     revealButton.onClick = [this] { if (lastExport.existsAsFile()) lastExport.revealToUser(); };
-    for (auto* b : { &folderButton, &exportButton, &revealButton }) addAndMakeVisible (*b);
+    for (auto* b : { &folderButton, &exportButton, &mp3Button, &revealButton }) addAndMakeVisible (*b);
 
     addAndMakeVisible (spectrum);
     rebuild();
@@ -168,7 +171,8 @@ void MasterPage::resized()
     auto e = exportArea.reduced (14, 12).withTrimmedTop (30 + 18);
     auto bottom = e.removeFromBottom (44 + 8 + 12 + 44);
     auto b = bottom.removeFromTop (44);
-    revealButton.setBounds (b.removeFromRight (120).reduced (2));
+    revealButton.setBounds (b.removeFromRight (110).reduced (2));
+    mp3Button.setBounds (b.removeFromRight (b.getWidth() / 2).reduced (2));
     exportButton.setBounds (b.reduced (2));
     const int gap = juce::jlimit (2, 14, (e.getHeight() - 212) / 9);
     auto row = [&e, gap] (int h2) { auto x = e.removeFromTop (h2); e.removeFromTop (gap); return x; };
@@ -249,6 +253,7 @@ void MasterPage::timerCallback()
     if (! isShowing() && job == nullptr) return;
     if (job != nullptr) progress = job->progress.load();
     exportButton.setButtonText (job != nullptr ? "CANCEL" : "EXPORT WAV");
+    mp3Button.setEnabled (job == nullptr);
     revealButton.setEnabled (lastExport.existsAsFile());
     if (masterStrip != nullptr) masterStrip->updateMeter();
     for (auto& s : slots) s->repaint();
@@ -256,7 +261,7 @@ void MasterPage::timerCallback()
     repaint (exportArea);
 }
 
-void MasterPage::startExport()
+void MasterPage::startExport (bool mp3)
 {
     if (job != nullptr) return;
     if (ctx.engine.getNumUsedTracks() == 0) { exportMessage = "Nothing to export yet: load your stems first."; repaint(); return; }
@@ -265,8 +270,8 @@ void MasterPage::startExport()
     ctx.settings.setValue ("exportName", fileName.getText());
     unfocusAllComponents();   // SPACE is play/stop again once you press EXPORT
 
-    const auto target = exportFolder().getChildFile (name + ".wav");
-    if (! target.existsAsFile()) { runExport (target); return; }
+    const auto target = exportFolder().getChildFile (name + (mp3 ? ".mp3" : ".wav"));
+    if (! target.existsAsFile()) { runExport (target, mp3); return; }
 
     // never overwrite an earlier export without asking
     const auto numbered = target.getNonexistentSibling (false);
@@ -277,11 +282,40 @@ void MasterPage::startExport()
     w->addButton ("REPLACE IT", 1);
     w->addButton ("CANCEL", 0, juce::KeyPress (juce::KeyPress::escapeKey));
     juce::Component::SafePointer<MasterPage> safe (this);
-    w->enterModalState (true, juce::ModalCallbackFunction::create ([safe, target, numbered] (int result)
+    w->enterModalState (true, juce::ModalCallbackFunction::create ([safe, target, numbered, mp3] (int result)
     {
         if (safe == nullptr || result == 0) return;
-        safe->runExport (result == 2 ? numbered : target);
+        safe->runExport (result == 2 ? numbered : target, mp3);
     }), true);
+}
+
+void MasterPage::exportWithDialog (bool mp3)
+{
+    if (job != nullptr) return;
+    if (ctx.engine.getNumUsedTracks() == 0) { exportMessage = "Nothing to export yet: load your stems first."; repaint(); return; }
+    auto name = juce::File::createLegalFileName (fileName.getText().trim());
+    if (name.isEmpty()) name = "Rework Playground mix";
+    const auto ext = mp3 ? juce::String (".mp3") : juce::String (".wav");
+    auto chooser = std::make_shared<juce::FileChooser> (mp3 ? "Export MP3" : "Export WAV", exportFolder().getChildFile (name + ext), "*" + ext);
+    juce::Component::SafePointer<MasterPage> safe (this);
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [safe, chooser, mp3, ext] (const juce::FileChooser& fc)
+    {
+        if (safe == nullptr || fc.getResult() == juce::File()) return;
+        const auto f = fc.getResult().withFileExtension (ext);
+        safe->fileName.setText (f.getFileNameWithoutExtension(), false);
+        safe->ctx.settings.setValue ("exportName", f.getFileNameWithoutExtension());
+        safe->runExport (f, mp3);
+    });
+}
+
+void MasterPage::resetFileName (const juce::String& songName)
+{
+    fileName.setText (lastAutoName = songName + " - master", false);
+    lastExport = juce::File();
+    exportMessage.clear();
+    progress = 0.0;
+    repaint();
 }
 
 void MasterPage::visibilityChanged()
@@ -291,13 +325,18 @@ void MasterPage::visibilityChanged()
     spectrum.visibilityChanged();   // the 3D meter only listens while this page is on screen
 }
 
-void MasterPage::runExport (const juce::File& target)
+void MasterPage::runExport (const juce::File& target, bool mp3)
 {
     if (job != nullptr) return;
     ExportOptions o;
     o.file = target;
     o.bitDepth = bits.getSelectedItemIndex() == 0 ? 16 : (bits.getSelectedItemIndex() == 2 ? 32 : 24);
     o.sampleRate = rate.getSelectedItemIndex() == 0 ? 44100.0 : (rate.getSelectedItemIndex() == 2 ? 96000.0 : 48000.0);
+    if (mp3)
+    {
+        o.mp3Kbps = Mp3Encoder::kDefaultKbps;
+        if (o.sampleRate > 48000.0) o.sampleRate = 48000.0;   // MP3 has no 96 kHz
+    }
     o.tailSeconds = tail.getValue();
     o.beforeMode = beforeVersion.getToggleState();
     o.clean = finish.getSelectedItemIndex() == 1;
@@ -328,7 +367,9 @@ void MasterPage::runExport (const juce::File& target)
         if (safe->ctx.status) safe->ctx.status ("EXPORT: " + safe->exportMessage);
         safe->repaint();
     });
-    exportMessage = "Exporting " + o.file.getFileName() + (o.clean ? " CLEAN" : " MASTERED") + " (" + juce::String (o.bitDepth) + "-bit, " + juce::String (o.sampleRate / 1000.0, 1) + " kHz)...";
+    exportMessage = "Exporting " + target.getFileName() + (o.clean ? " CLEAN" : " MASTERED")
+                    + (mp3 ? " (MP3 " + juce::String (o.mp3Kbps) + " kbps, " + juce::String (o.sampleRate / 1000.0, 1) + " kHz)..."
+                           : " (" + juce::String (o.bitDepth) + "-bit, " + juce::String (o.sampleRate / 1000.0, 1) + " kHz)...");
     progress = 0.0;
     job->startThread();
     repaint();

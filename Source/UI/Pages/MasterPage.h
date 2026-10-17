@@ -15,8 +15,13 @@ public:
     void resized() override;
     void paint (juce::Graphics&) override;
     void rebuild();
-    void startExport();
-    void runExport (const juce::File& target);
+    /** EXPORT button / Ctrl+E: into the export folder under the FILE NAME, asks before replacing. */
+    void startExport (bool mp3 = false);
+    /** File > Export WAV / MP3: a Save dialog to pick the name and place. */
+    void exportWithDialog (bool mp3);
+    void runExport (const juce::File& target, bool mp3);
+    /** New / opened session: the file name follows the song name again. */
+    void resetFileName (const juce::String& songName);
     void visibilityChanged() override;
     bool isExporting() const noexcept { return job != nullptr; }
     void setSongName (const juce::String& n) { if (fileName.getText().isEmpty() || fileName.getText() == lastAutoName) fileName.setText (lastAutoName = n + " - master", false); }
@@ -37,7 +42,7 @@ private:
     std::unique_ptr<ChannelStrip> masterStrip;
     juce::TextButton matchButton { "MATCH TARGET" }, resetButton { "RESET METERS" }, addMasterButton { "ADD ELITE MASTER" };
     juce::TextEditor fileName;
-    juce::TextButton folderButton { "FOLDER..." }, exportButton { "EXPORT WAV" }, revealButton { "SHOW FILE" };
+    juce::TextButton folderButton { "FOLDER..." }, exportButton { "EXPORT WAV" }, mp3Button { "EXPORT MP3" }, revealButton { "SHOW FILE" };
     juce::ComboBox finish, bits, rate;
     juce::Slider tail;
     juce::ToggleButton beforeVersion { "BEFORE VERSION (plugins off)" };

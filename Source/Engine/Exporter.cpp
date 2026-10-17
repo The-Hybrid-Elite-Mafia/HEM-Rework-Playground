@@ -1,4 +1,5 @@
 #include "Exporter.h"
+#include "Mp3Encoder.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <limits>
 
@@ -26,10 +27,30 @@ OfflineExport::OfflineExport (const juce::ValueTree& session, const std::map<juc
 
 bool OfflineExport::render (const std::function<void (double)>& progress, const std::function<bool()>& shouldCancel, juce::String& error)
 {
+    if (options.mp3Kbps <= 0)
+        return renderWav (options.file.withFileExtension (".wav"), progress, shouldCancel, error);
+
+    // MP3: 16-bit WAV next to the target first (90 % of the bar), then Windows encodes it (last 10 %)
+    const double rate = options.sampleRate;
+    if (std::abs (rate - 44100.0) > 0.5 && std::abs (rate - 48000.0) > 0.5) { error = "MP3 needs 44.1 or 48 kHz."; return false; }
+    const auto mp3 = getTargetFile();
+    const auto wav = mp3.getSiblingFile (mp3.getFileNameWithoutExtension() + " (making mp3).wav");
+    const int bits = options.bitDepth;
+    options.bitDepth = 16;
+    const bool rendered = renderWav (wav, [&progress] (double p) { if (progress) progress (p * 0.9); }, shouldCancel, error);
+    options.bitDepth = bits;
+    if (! rendered) { wav.deleteFile(); return false; }
+    const bool ok = Mp3Encoder::encode (wav, mp3, options.mp3Kbps, error,
+                                        [&progress] (double p) { if (progress) progress (0.9 + 0.1 * p); }, shouldCancel);
+    wav.deleteFile();
+    return ok;
+}
+
+bool OfflineExport::renderWav (const juce::File& target, const std::function<void (double)>& progress, const std::function<bool()>& shouldCancel, juce::String& error)
+{
     if (options.bitDepth != 16 && options.bitDepth != 24 && options.bitDepth != 32) { error = "Unsupported bit depth."; return false; }
     if (engine.getSongLengthSeconds() <= 0.0) { error = "Nothing to export: load some tracks first."; return false; }
 
-    const auto target = options.file.withFileExtension (".wav");
     if (! target.getParentDirectory().createDirectory()) { error = "Cannot create " + target.getParentDirectory().getFullPathName(); return false; }
     juce::TemporaryFile temp (target);
 

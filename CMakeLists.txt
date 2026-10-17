@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(HEMPlayground VERSION 0.8.0 LANGUAGES C CXX)
+project(HEMPlayground VERSION 0.9.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,6 +39,7 @@ set(PG_CORE_SOURCES
     Source/Engine/MediaLoader.cpp
     Source/Engine/SincResampler.cpp
     Source/Engine/Exporter.cpp
+    Source/Engine/Mp3Encoder.cpp
     Source/Session/SessionFile.cpp
     Source/Session/UndoHistory.cpp
     Source/Band/BandTypes.cpp
@@ -157,4 +158,13 @@ if(PG_BUILD_TESTS)
     endif()
     enable_testing()
     add_test(NAME PlaygroundTests COMMAND PlaygroundTests)
+endif()
+
+# MP3 export uses the encoder that comes with Windows (Media Foundation)
+if(WIN32)
+    foreach(pg_target ReworkPlayground PlaygroundTests FaceplatePreview ScreenPreview BandDemo)
+        if(TARGET ${pg_target})
+            target_link_libraries(${pg_target} PRIVATE mf mfplat mfreadwrite mfuuid ole32)
+        endif()
+    endforeach()
 endif()
