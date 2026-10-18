@@ -6,10 +6,7 @@ name: Build HEM Rework Playground Windows installer
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths-ignore: ['**.md']
-  
+
 permissions:
   contents: write
 
