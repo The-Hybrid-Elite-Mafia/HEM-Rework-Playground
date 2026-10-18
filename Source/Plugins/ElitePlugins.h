@@ -309,4 +309,289 @@ private:
     std::vector<Frame> frames = std::vector<Frame> ((size_t) kFrameFifo);
     Frame work;
 };
+//==============================================================================
+/** ELITE TRANSIENT - punch and sustain shaper: turns the hit (attack) and the ring-out (sustain)
+    up or down without touching the level in between. No look-ahead, no latency. */
+class EliteTransient final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    static juce::StringArray speeds() { return { "Fast", "Medium", "Slow" }; }
+    EliteTransient();
+    enum Readout { gainNow };
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    std::atomic<float> *pAttack, *pSustain, *pSpeed, *pOutput, *pMix;
+    float envFast = 0.0f, envSlow = 0.0f, envHold = 0.0f;
+    float aFast = 0.0f, rFast = 0.0f, aSlow = 0.0f, rSlow = 0.0f, rHold = 0.0f;
+    int lastSpeed = -1;
+    juce::SmoothedValue<float> output, mix;
+};
+
+//==============================================================================
+/** ELITE MULTIBAND - three-band compressor for mastering and busses. Linkwitz-Riley 24 dB/oct
+    crossovers (the bands add back up flat), one compressor per band, per-band gain. */
+class EliteMultiband final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    EliteMultiband();
+    enum Readout { lowGr, midGr, highGr };
+    static juce::String id (int band, const char* what) { return juce::String (band == 0 ? "low_" : band == 1 ? "mid_" : "high_") + what; }
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    void updateFilters() noexcept;
+    struct Band { std::atomic<float> *thr, *ratio, *gain; dsp::CompressorCore comp; juce::SmoothedValue<float> g; };
+    std::array<Band, 3> bands;
+    std::atomic<float> *pLowX, *pHighX, *pAttack, *pRelease, *pMix, *pOutput;
+    float lastLowX = -1.0f, lastHighX = -1.0f, lastAtk = -1.0f, lastRel = -1.0f;
+    std::array<float, 3> lastThr { -999.0f, -999.0f, -999.0f }, lastRatio { 0.0f, 0.0f, 0.0f };
+    BiquadCoeffs lp1, hp1, lp2, hp2;
+    // [channel][stage]: low path (LP1 x2, then allpass at f2 = LP2 x2 + HP2 x2), rest path (HP1 x2), mid (LP2 x2), high (HP2 x2)
+    std::array<std::array<BiquadState, 2>, 2> sLp1, sHp1, sLp2, sHp2, sApLo, sApHi;
+    juce::SmoothedValue<float> mix, output;
+};
+
+//==============================================================================
+/** ELITE WIDTH - stereo width with mono bass: makes the sides wider or narrower above a
+    frequency and folds everything below it to mono (tight low end, safe on club systems). */
+class EliteWidth final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    EliteWidth();
+    enum Readout { correlation, sideLevel };
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    std::atomic<float> *pWidth, *pMonoBelow, *pOutput;
+    float lastMono = -1.0f;
+    BiquadCoeffs hp;
+    std::array<BiquadState, 2> sideHp;
+    juce::SmoothedValue<float> width, output;
+    double corrLR = 0.0, corrLL = 0.0, corrRR = 0.0, sideAvg = 0.0, totalAvg = 0.0;
+    float corrCoeff = 0.999f;
+};
+
+//==============================================================================
+/** ELITE HUSH - hiss and noise remover. Learns the noise floor of every frequency on its own
+    (the quietest level it keeps coming back to) and turns down only what sits near that floor,
+    so the music on top is left alone. LISTEN plays just what is being removed. */
+class EliteHush final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    EliteHush();
+    enum Readout { removedDb, noiseDb };
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+    int dspLatency() const noexcept override { return fftSize; }
+
+private:
+    void processFrame() noexcept;
+    std::atomic<float> *pAmount, *pReduction, *pFrom, *pListen, *pOutput;
+    int fftSize = 2048, hop = 512, pos = 0, hopCount = 0;
+    dsp::Fft fft;
+    std::vector<float> window, inL, inR, outL, outR;
+    std::vector<std::complex<float>> bufL, bufR;
+    std::vector<float> power, smoothed, noise, gain, gainTmp;
+    // noise floor = lowest level over the last ~4 s (8 slots of 0.5 s each), per frequency
+    static constexpr int kSlots = 8;
+    std::vector<float> slotMin, curMin;
+    int framesPerSlot = 47, slotFrame = 0, slot = 0, slotsFilled = 0;
+    float removedAvg = 0.0f;
+    juce::SmoothedValue<float> output;
+};
+
+//==============================================================================
+/** ELITE DE-ESS - sibilance tamer: listens to the S / T / SH range and turns only that range down
+    while it is too loud. Everything below FREQUENCY is untouched. LISTEN = hear what it catches. */
+class EliteDeEss final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    EliteDeEss();
+    enum Readout { gr, sibilanceDb };
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    std::atomic<float> *pFreq, *pThreshold, *pRange, *pListen, *pOutput;
+    float lastFreq = -1.0f;
+    BiquadCoeffs splitHp, splitLp, detBp;
+    std::array<BiquadState, 2> hpL, hpR, lpL, lpR, det;
+    float env = 0.0f, att = 0.0f, rel = 0.0f, grSmooth = 0.0f, grCoeff = 0.0f;
+    juce::SmoothedValue<float> output;
+};
+
+//==============================================================================
+/** ELITE DOUBLER - turns one vocal (or guitar) into a wide double: two slightly late, slightly
+    drifting copies panned left and right behind the original. */
+class EliteDoubler final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    EliteDoubler();
+    enum Readout { spreadMs };
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    std::atomic<float> *pAmount, *pWidth, *pDelay, *pDrift, *pTone, *pOutput;
+    std::vector<float> line;
+    int writePos = 0;
+    double phaseA = 0.0, phaseB = 0.37, phaseC = 0.71;
+    float lastTone = -1.0f;
+    BiquadCoeffs toneHp;
+    std::array<BiquadState, 2> toneSt;
+    juce::SmoothedValue<float> amount, width, delayMs, drift, output;
+};
+
+//==============================================================================
+/** ELITE CONSOLE - mixing-desk glue: gentle channel saturation, transformer weight and air,
+    a touch of left / right crosstalk. Output follows the input level (drive does not get louder). */
+class EliteConsole final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    static juce::StringArray characters() { return { "Clean Desk", "British Iron", "American Punch", "Tube Bus" }; }
+    EliteConsole();
+    enum Readout { driveDb };
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    std::atomic<float> *pDrive, *pChar, *pCrosstalk, *pOutput;
+    int lastChar = -1;
+    BiquadCoeffs lowBump, highAir, xtalkLp, dcBlock;
+    std::array<BiquadState, 2> lowSt, highSt, xtSt, dcSt;
+    float bias = 0.0f;
+    juce::SmoothedValue<float> drive, crosstalk, output;
+};
+
+//==============================================================================
+/** ELITE LO-FI - old-tape and old-sampler character: wow and flutter, bit depth and sample-rate
+    crush, vinyl crackle and hiss, dark tone, dry / wet mix. */
+class EliteLofi final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    EliteLofi();
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    std::atomic<float> *pWow, *pFlutter, *pBits, *pRate, *pVinyl, *pTone, *pMix, *pOutput;
+    std::vector<float> lineL, lineR;
+    int writePos = 0;
+    double wowPhase = 0.0, flutterPhase = 0.0;
+    float holdL = 0.0f, holdR = 0.0f, holdCount = 0.0f;
+    float lastTone = -1.0f;
+    BiquadCoeffs toneLp, noiseHp;
+    std::array<BiquadState, 2> toneSt;
+    BiquadState noiseSt;
+    juce::uint32 rng = 0x48454D21u;
+    float crackleEnv = 0.0f;
+    juce::SmoothedValue<float> mix, output;
+};
+
+//==============================================================================
+/** ELITE TUNE - vocal pitch correction. Hears the note being sung (one voice), finds the nearest
+    note of the chosen key / scale and pulls the pitch there. SPEED 0 = hard robot snap, slower =
+    natural. Works on one voice at a time (lead vocal, a solo instrument), not chords. */
+class EliteTune final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    static juce::StringArray keys() { return { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" }; }
+    static juce::StringArray scales() { return { "Chromatic", "Major", "Minor" }; }
+    EliteTune();
+    enum Readout { detectedHz, correctionCents, targetMidi };
+
+    /** Nearest allowed MIDI note (fractional input) for key / scale. */
+    static float snapToScale (float midi, int key, int scale) noexcept;
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+    int dspLatency() const noexcept override { return shiftWin / 2; }   // the shifter rests at half its window
+
+private:
+    float detectPitch() noexcept;
+    std::atomic<float> *pKey, *pScale, *pSpeed, *pAmount, *pLow, *pHigh, *pOutput;
+    // pitch detection runs on a mono copy at ~24 kHz (cheaper, plenty for voices up to 1 kHz)
+    int decim = 2, decimCount = 0;
+    float decimAcc = 0.0f;
+    double anaRate = 24000.0;
+    std::vector<float> ana, frame, yin;   // ring, linear copy, YIN difference function
+    int anaPos = 0, anaWin = 480, tauMaxAlloc = 482, hopCount = 0, hop = 128;
+    // pitch-shift delay line (two crossfading read heads)
+    std::vector<float> lineL, lineR;
+    int writePos = 0, shiftWin = 1440;
+    double phase = 0.5;
+    float ratio = 1.0f, targetRatio = 1.0f, lastHz = 0.0f, lastCents = 0.0f, lastTarget = 0.0f;
+    juce::SmoothedValue<float> output;
+};
+
+//==============================================================================
+/** ELITE BALANCE - automatic tone balance: listens to the whole mix for a few seconds, compares
+    eight frequency regions to a smooth target tilt and gently corrects the ones that stick out or
+    are missing. AMOUNT = how much of the correction to use, RANGE = the most any band may move. */
+class EliteBalance final : public ElitePlugin
+{
+public:
+    static const PluginInfo info;
+    static constexpr int kBands = 8;
+    static float bandHz (int b) noexcept { return 62.5f * (float) (1 << b); }   // 62.5 Hz .. 8 kHz
+    static juce::StringArray speeds() { return { "Slow", "Medium", "Fast" }; }
+    EliteBalance();
+    /** readout b = correction in dB applied to band b (0..7) */
+
+protected:
+    void prepareDsp (double, int) override;
+    void processDsp (float*, float*, int) noexcept override;
+    void resetDsp() noexcept override;
+
+private:
+    std::atomic<float> *pAmount, *pTilt, *pRange, *pSpeed, *pFreeze, *pOutput;
+    std::array<BiquadCoeffs, kBands> bp, eq;
+    std::array<BiquadState, kBands> bpSt;
+    std::array<std::array<BiquadState, kBands>, 2> eqSt;
+    std::array<float, kBands> power {}, applied {};
+    float envCoeff = 0.9999f;
+    int sinceUpdate = 0, updateEvery = 256;
+    double warmSamples = 0.0;
+    juce::SmoothedValue<float> output;
+};
 } // namespace pg

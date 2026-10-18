@@ -117,6 +117,14 @@ struct BiquadCoeffs
         return 20.0 * std::log10 (std::max (mag, 1.0e-12));
     }
 
+    /** Band-pass, 0 dB at the centre (RBJ "constant 0 dB peak gain"). */
+    static BiquadCoeffs bandPass (double fs, double f0, double q) noexcept
+    {
+        const double w0 = 2.0 * std::numbers::pi * clampFreq (f0, fs) / fs;
+        const double alpha = std::sin (w0) / (2.0 * q);
+        return normalise (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * std::cos (w0), 1.0 - alpha);
+    }
+
     static double clampFreq (double f, double fs) noexcept { return std::fmin (std::fmax (f, 10.0), fs * 0.49); }
 
 private:

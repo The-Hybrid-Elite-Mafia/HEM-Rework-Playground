@@ -97,8 +97,8 @@ public:
 
     void runTest() override
     {
-        beginTest ("nine plugins, unique ids, only Elite Master is master-only");
-        expectEquals ((int) PluginRegistry::all().size(), 9);
+        beginTest ("nineteen plugins, unique ids, only Elite Master is master-only");
+        expectEquals ((int) PluginRegistry::all().size(), 19);
         juce::StringArray ids;
         for (auto* info : PluginRegistry::all())
         {
@@ -791,6 +791,377 @@ public:
         }
     }
 };
+
+//==============================================================================
+class NewPluginTests final : public juce::UnitTest
+{
+public:
+    NewPluginTests() : juce::UnitTest ("Elite Plugins 0.10 (ten new)", "Playground") {}
+
+    /** Amplitude of the hz component in x[from..] (projection on sin / cos). */
+    static double toneAmp (const std::vector<float>& x, double hz, int from, double fs = kFs)
+    {
+        double s = 0.0, c = 0.0;
+        const int n = (int) x.size() - from;
+        for (int i = from; i < (int) x.size(); ++i)
+        {
+            const double w = 2.0 * juce::MathConstants<double>::pi * hz * i / fs;
+            s += x[(size_t) i] * std::sin (w);
+            c += x[(size_t) i] * std::cos (w);
+        }
+        return 2.0 * std::sqrt (s * s + c * c) / juce::jmax (1, n);
+    }
+
+    static double highEnergy (const std::vector<float>& x, int from, double hz)
+    {
+        auto c = BiquadCoeffs::highPass (kFs, hz, 0.7071);
+        BiquadState s1, s2;
+        double e = 0.0;
+        for (size_t i = 0; i < x.size(); ++i)
+        {
+            const float y = s2.process (c, s1.process (c, x[i]));
+            if ((int) i >= from) e += (double) y * y;
+        }
+        return e;
+    }
+
+    /** Frequency from rising zero crossings (with sub-sample interpolation) over x[from..]. */
+    static double zeroCrossHz (const std::vector<float>& x, int from)
+    {
+        double first = -1.0, last = -1.0;
+        int count = 0;
+        for (int i = from + 1; i < (int) x.size(); ++i)
+            if (x[(size_t) i - 1] < 0.0f && x[(size_t) i] >= 0.0f)
+            {
+                const double t = (double) (i - 1) + x[(size_t) i - 1] / (double) (x[(size_t) i - 1] - x[(size_t) i]);
+                if (first < 0.0) first = t; else ++count;
+                last = t;
+            }
+        return count > 0 ? kFs * count / (last - first) : 0.0;
+    }
+
+    /** Kick-like hits: 80 Hz sine with a 60 ms decay, every 250 ms. */
+    static Stereo hits (int n)
+    {
+        Stereo s (n);
+        const int period = (int) (0.25 * kFs);
+        for (int i = 0; i < n; ++i)
+        {
+            const int t = i % period;
+            const float v = 0.5f * (float) std::exp (-t / (0.06 * kFs)) * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 80.0 * t / kFs);
+            s.l[(size_t) i] = s.r[(size_t) i] = v;
+        }
+        return s;
+    }
+
+    static double segmentRms (const Stereo& s, int periodOffsetFrom, int periodOffsetTo)
+    {
+        const int period = (int) (0.25 * kFs);
+        double acc = 0.0; int cnt = 0;
+        for (int start = period * 2; start + period <= s.size(); start += period)   // skip the first two hits (warm-up)
+            for (int i = start + periodOffsetFrom; i < start + periodOffsetTo; ++i) { acc += (double) s.l[(size_t) i] * s.l[(size_t) i]; ++cnt; }
+        return std::sqrt (acc / juce::jmax (1, cnt));
+    }
+
+    void runTest() override
+    {
+        //------------------------------------------------------------------
+        beginTest ("Elite Transient: defaults leave audio alone; ATTACK + boosts the hit; SUSTAIN - shortens the tail");
+        {
+            const int n = (int) kFs * 2;
+            const auto dry = hits (n);
+            const int hitFrom = 0, hitTo = (int) (0.004 * kFs), tailFrom = (int) (0.06 * kFs), tailTo = (int) (0.2 * kFs);
+            {
+                auto p = make ("elite-transient");
+                auto x = dry; run (*p, x);
+                double err = 0.0;
+                for (int i = 0; i < n; ++i) err = juce::jmax (err, (double) std::abs (x.l[(size_t) i] - dry.l[(size_t) i]));
+                expectLessThan (err, 1.0e-5);
+            }
+            {
+                auto p = make ("elite-transient");
+                set (*p, "attack", 100.0f);
+                auto x = dry; run (*p, x);
+                const double gain = db (segmentRms (x, hitFrom, hitTo) / segmentRms (dry, hitFrom, hitTo));
+                logMessage ("  attack +100: hit " + juce::String (gain, 2) + " dB");
+                expectGreaterThan (gain, 3.0);
+            }
+            {
+                auto p = make ("elite-transient");
+                set (*p, "sustain", -100.0f);
+                auto x = dry; run (*p, x);
+                const double tail = db (segmentRms (x, tailFrom, tailTo) / segmentRms (dry, tailFrom, tailTo));
+                logMessage ("  sustain -100: tail " + juce::String (tail, 2) + " dB");
+                expectLessThan (tail, -3.0);
+            }
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Multiband: no compression = flat (crossovers add back up); band gain moves only its band");
+        {
+            auto p = make ("elite-multiband");
+            for (int b = 0; b < 3; ++b) set (*p, EliteMultiband::id (b, "ratio").toRawUTF8(), 1.0f);
+            for (double hz : { 60.0, 180.0, 1000.0, 3500.0, 10000.0 })
+                expectWithinAbsoluteError (gainAt (*p, hz), 0.0, 0.2, "not flat at " + juce::String (hz));
+            set (*p, EliteMultiband::id (0, "gain").toRawUTF8(), 6.0f);
+            expectWithinAbsoluteError (gainAt (*p, 40.0), 6.0, 0.5);
+            expectWithinAbsoluteError (gainAt (*p, 8000.0), 0.0, 0.3);
+        }
+        beginTest ("Elite Multiband: a loud low band gets compressed, the high band does not");
+        {
+            auto p = make ("elite-multiband");
+            set (*p, EliteMultiband::id (0, "thr").toRawUTF8(), -30.0f);
+            set (*p, EliteMultiband::id (0, "ratio").toRawUTF8(), 4.0f);
+            set (*p, EliteMultiband::id (2, "thr").toRawUTF8(), -30.0f);
+            set (*p, EliteMultiband::id (2, "ratio").toRawUTF8(), 4.0f);
+            auto x = sine ((int) kFs, 60.0, 0.5f);
+            run (*p, x);
+            expectGreaterThan (p->getReadout (EliteMultiband::lowGr), 6.0f);
+            expectLessThan (p->getReadout (EliteMultiband::highGr), 0.5f);
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Width: 0 % = mono; MONO BELOW removes the sides in the lows but keeps them up top");
+        {
+            auto p = make ("elite-width");
+            set (*p, "width", 0.0f); set (*p, "mono_below", 20.0f);
+            p->prepareToPlay (kFs, kBlock);
+            auto x = noise ((int) kFs, 0.3f);
+            run (*p, x);
+            double err = 0.0;
+            for (int i = 4800; i < x.size(); ++i) err = juce::jmax (err, (double) std::abs (x.l[(size_t) i] - x.r[(size_t) i]));
+            expectLessThan (err, 1.0e-5);
+            expectGreaterThan (p->getReadout (EliteWidth::correlation), 0.99f);
+
+            auto q = make ("elite-width");
+            set (*q, "mono_below", 150.0f);
+            q->prepareToPlay (kFs, kBlock);
+            for (double hz : { 40.0, 3000.0 })
+            {
+                q->reset();
+                Stereo s ((int) kFs);   // pure side: L = +sine, R = -sine
+                for (int i = 0; i < s.size(); ++i) { s.l[(size_t) i] = 0.3f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * hz * i / kFs); s.r[(size_t) i] = -s.l[(size_t) i]; }
+                run (*q, s);
+                const double g = db (toneAmp (s.l, hz, (int) kFs / 2) / 0.3);
+                logMessage ("  side at " + juce::String (hz) + " Hz: " + juce::String (g, 2) + " dB");
+                if (hz < 100.0) expectLessThan (g, -20.0); else expectWithinAbsoluteError (g, 0.0, 0.5);
+            }
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Hush: hiss goes down by 6 dB or more, a held 1 kHz tone stays within 1 dB");
+        {
+            auto p = make ("elite-hush");
+            set (*p, "amount", 60.0f); set (*p, "reduction", 18.0f);
+            p->prepareToPlay (kFs, kBlock);
+            const int n = (int) kFs * 6;
+            auto x = noise (n, 0.01f, 31);
+            auto ref = x;
+            for (int i = 0; i < n; ++i)
+            {
+                const float t = 0.3f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * i / kFs);
+                x.l[(size_t) i] += t; x.r[(size_t) i] += t;
+            }
+            auto in = x;
+            run (*p, x);
+            const int from = (int) kFs * 4;   // after the noise floor has been learned
+            const double hissDrop = 10.0 * std::log10 (highEnergy (x.l, from, 4000.0) / highEnergy (in.l, from - p->getLatencySamples(), 4000.0));
+            const double tone = db (toneAmp (x.l, 1000.0, from) / 0.3);
+            logMessage ("  hiss above 4 kHz: " + juce::String (hissDrop, 2) + " dB, 1 kHz tone: " + juce::String (tone, 2) + " dB, readout removed "
+                        + juce::String (p->getReadout (EliteHush::removedDb), 1) + " dB");
+            expectLessThan (hissDrop, -6.0);
+            expectWithinAbsoluteError (tone, 0.0, 1.0);
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite De-Ess: a loud 8 kHz 'ess' is turned down, 500 Hz at the same level is left alone");
+        {
+            for (double hz : { 8000.0, 500.0 })
+            {
+                auto p = make ("elite-de-ess");
+                auto x = sine ((int) kFs, hz, 0.5f);
+                run (*p, x);
+                const double g = db (toneAmp (x.l, hz, (int) kFs / 2) / 0.5);
+                logMessage ("  " + juce::String (hz) + " Hz: " + juce::String (g, 2) + " dB");
+                if (hz > 1000.0) { expectLessThan (g, -6.0); expectGreaterThan (p->getReadout (EliteDeEss::gr), 6.0f); }
+                else expectWithinAbsoluteError (g, 0.0, 0.3);
+            }
+            auto q = make ("elite-de-ess");
+            auto quiet = sine ((int) kFs, 8000.0, 0.005f);   // below the threshold: untouched
+            run (*q, quiet);
+            expectWithinAbsoluteError (db (toneAmp (quiet.l, 8000.0, (int) kFs / 2) / 0.005), 0.0, 0.3);
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Doubler: AMOUNT 0 = untouched; a mono vocal comes out wide (left and right differ)");
+        {
+            auto p = make ("elite-doubler");
+            set (*p, "amount", 0.0f);
+            p->prepareToPlay (kFs, kBlock);
+            auto in = noise ((int) kFs, 0.3f);
+            in.r = in.l;
+            auto x = in; run (*p, x);
+            double err = 0.0;
+            for (int i = 0; i < x.size(); ++i) err = juce::jmax (err, (double) std::abs (x.l[(size_t) i] - in.l[(size_t) i]));
+            expectLessThan (err, 1.0e-6);
+
+            auto q = make ("elite-doubler");
+            set (*q, "amount", 100.0f); set (*q, "width", 100.0f);
+            q->prepareToPlay (kFs, kBlock);
+            auto y = in; run (*q, y);
+            double lr = 0, ll = 0, rr = 0;
+            for (int i = 4800; i < y.size(); ++i) { lr += y.l[(size_t) i] * y.r[(size_t) i]; ll += y.l[(size_t) i] * y.l[(size_t) i]; rr += y.r[(size_t) i] * y.r[(size_t) i]; }
+            const double corr = lr / std::sqrt (ll * rr);
+            logMessage ("  L/R correlation with doubling: " + juce::String (corr, 3));
+            expectLessThan (corr, 0.9);
+            expectGreaterThan (q->getReadout (EliteDoubler::spreadMs), 3.0f);
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Console: quiet parts keep their level, loud parts get harmonics; characters differ");
+        {
+            auto p = make ("elite-console");
+            set (*p, "character", 0.0f); set (*p, "crosstalk", 0.0f); set (*p, "drive", 12.0f);
+            p->prepareToPlay (kFs, kBlock);
+            {
+                p->reset();
+                auto quiet = sine ((int) kFs, 1000.0, 0.003f);
+                run (*p, quiet);
+                expectWithinAbsoluteError (db (toneAmp (quiet.l, 1000.0, (int) kFs / 2) / 0.003), 0.0, 0.2);
+            }
+            p->reset();
+            auto loud = sine ((int) kFs, 200.0, 0.8f);
+            run (*p, loud);
+            const double h3 = db (toneAmp (loud.l, 600.0, (int) kFs / 2) / toneAmp (loud.l, 200.0, (int) kFs / 2));
+            const double h2clean = db (toneAmp (loud.l, 400.0, (int) kFs / 2) / toneAmp (loud.l, 200.0, (int) kFs / 2));
+            logMessage ("  Clean Desk, 12 dB drive: 3rd harmonic " + juce::String (h3, 1) + " dB, 2nd " + juce::String (h2clean, 1) + " dB");
+            expectGreaterThan (h3, -40.0);
+            expectLessThan (h2clean, -80.0);   // symmetric curve: no even harmonics
+            expectGreaterThan (p->getReadout (EliteConsole::driveDb), 1.0f);
+
+            set (*p, "character", 3.0f);   // Tube Bus: asymmetric = even harmonics
+            p->reset();
+            auto loud2 = sine ((int) kFs, 200.0, 0.8f);
+            run (*p, loud2);
+            const double h2 = db (toneAmp (loud2.l, 400.0, (int) kFs / 2) / toneAmp (loud2.l, 200.0, (int) kFs / 2));
+            logMessage ("  Tube Bus: 2nd harmonic " + juce::String (h2, 1) + " dB");
+            expectGreaterThan (h2, -50.0);
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Lo-Fi: MIX 0 is dry; 4 bits leaves only a handful of levels; wow bends the pitch");
+        {
+            auto p = make ("elite-lofi");
+            set (*p, "mix", 0.0f);
+            p->prepareToPlay (kFs, kBlock);
+            auto in = noise ((int) kFs / 2, 0.3f);
+            auto x = in; run (*p, x);
+            double err = 0.0;
+            for (int i = 0; i < x.size(); ++i) err = juce::jmax (err, (double) std::abs (x.l[(size_t) i] - in.l[(size_t) i]));
+            expectLessThan (err, 1.0e-6);
+
+            auto q = make ("elite-lofi");
+            set (*q, "wow", 0.0f); set (*q, "flutter", 0.0f); set (*q, "vinyl", 0.0f); set (*q, "tone", 20000.0f); set (*q, "bits", 4.0f);
+            q->prepareToPlay (kFs, kBlock);
+            auto s = sine (4800, 100.0, 0.9f);
+            // measure the crush itself: tone filter wide open, compare against the nearest of 2^3 steps
+            run (*q, s);
+            double dev = 0.0;
+            const auto clean = sine (4800, 100.0, 0.9f);
+            for (int i = 1000; i < 4800; ++i) dev = juce::jmax (dev, (double) std::abs (s.l[(size_t) i] - clean.l[(size_t) i]));
+            logMessage ("  4-bit max error vs clean: " + juce::String (dev, 3));
+            expectGreaterThan (dev, 0.04);   // 1/8 steps: errors up to ~0.06 (plus the tone filter's ripple)
+
+            auto w = make ("elite-lofi");
+            set (*w, "wow", 100.0f); set (*w, "flutter", 0.0f); set (*w, "vinyl", 0.0f); set (*w, "tone", 20000.0f);
+            w->prepareToPlay (kFs, kBlock);
+            auto t = sine ((int) kFs * 2, 1000.0, 0.5f);
+            run (*w, t);
+            // pitch over short windows must wander (tape wow), then come back
+            double lo = 1.0e9, hi = 0.0;
+            for (int start = (int) kFs / 2; start + 4800 <= t.size(); start += 2400)
+            {
+                std::vector<float> seg (t.l.begin() + start, t.l.begin() + start + 4800);
+                const double f = zeroCrossHz (seg, 0);
+                lo = juce::jmin (lo, f); hi = juce::jmax (hi, f);
+            }
+            logMessage ("  wow 100 %: pitch wanders " + juce::String (lo, 1) + " .. " + juce::String (hi, 1) + " Hz");
+            expectGreaterThan (hi - lo, 4.0);
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Tune: notes snap to the key / scale");
+        {
+            expectEquals (EliteTune::snapToScale (69.3f, 0, 0), 69.0f);    // chromatic: nearest semitone
+            expectEquals (EliteTune::snapToScale (61.4f, 0, 1), 62.0f);    // C major: C# is not allowed, D is nearer
+            expectEquals (EliteTune::snapToScale (66.2f, 0, 1), 67.0f);    // F# -> G
+            expectEquals (EliteTune::snapToScale (68.3f, 9, 2), 69.0f);    // A minor: G# -> A
+            expectEquals (EliteTune::snapToScale (63.2f, 9, 2), 64.0f);    // A minor: D# (a bit sharp) -> E
+            expectEquals (EliteTune::snapToScale (62.8f, 9, 2), 62.0f);    // A minor: D# (a bit flat) -> D
+        }
+        beginTest ("Elite Tune: a 452 Hz voice (47 cents sharp of A) comes out at 440 Hz; AMOUNT 0 = untouched");
+        {
+            auto p = make ("elite-tune");
+            set (*p, "speed", 0.0f);
+            p->prepareToPlay (kFs, kBlock);
+            auto x = sine ((int) kFs * 2, 452.0, 0.4f);
+            run (*p, x);
+            std::vector<float> tail (x.l.begin() + (int) kFs, x.l.end());
+            const double hz = zeroCrossHz (tail, 0);
+            logMessage ("  in 452 Hz -> out " + juce::String (hz, 2) + " Hz, detected " + juce::String (p->getReadout (EliteTune::detectedHz), 2)
+                        + " Hz, correction " + juce::String (p->getReadout (EliteTune::correctionCents), 1) + " cents");
+            expectWithinAbsoluteError (hz, 440.0, 2.0);
+            expectWithinAbsoluteError ((double) p->getReadout (EliteTune::detectedHz), 452.0, 2.0);
+            expectEquals ((int) p->getReadout (EliteTune::targetMidi), 69);
+
+            auto q = make ("elite-tune");
+            set (*q, "amount", 0.0f);
+            q->prepareToPlay (kFs, kBlock);
+            const int lat = q->getLatencySamples();
+            expectEquals (lat, (int) std::lround (0.03 * kFs) / 2);
+            auto in = noise ((int) kFs, 0.3f);
+            auto y = in; run (*q, y);
+            double err = 0.0;
+            for (int i = lat; i < y.size(); ++i) err = juce::jmax (err, (double) std::abs (y.l[(size_t) i] - in.l[(size_t) (i - lat)]));
+            expectLessThan (err, 1.0e-5);
+        }
+
+        //------------------------------------------------------------------
+        beginTest ("Elite Balance: a mix with a +8 dB bump at 1 kHz gets the 1 kHz band turned down");
+        {
+            auto p = make ("elite-balance");
+            set (*p, "amount", 100.0f); set (*p, "range", 12.0f); set (*p, "speed", 2.0f);
+            set (*p, "tilt", 3.0f);   // white noise rises 3 dB per octave in octave bands: that is the target here
+            p->prepareToPlay (kFs, kBlock);
+            const int n = (int) kFs * 8;
+            auto x = noise (n, 0.1f, 17);
+            auto bump = BiquadCoeffs::peak (kFs, 1000.0, 1.41, 8.0);
+            BiquadState sl, sr;
+            for (int i = 0; i < n; ++i) { x.l[(size_t) i] = sl.process (bump, x.l[(size_t) i]); x.r[(size_t) i] = sr.process (bump, x.r[(size_t) i]); }
+            run (*p, x);
+            juce::String shown;
+            int mostCut = 0;
+            for (int b = 0; b < EliteBalance::kBands; ++b)
+            {
+                shown << juce::String (p->getReadout (b), 1) << " ";
+                if (p->getReadout (b) < p->getReadout (mostCut)) mostCut = b;
+            }
+            logMessage ("  band corrections (62.5 Hz .. 8 kHz): " + shown);
+            expectEquals (mostCut, 4);
+            expectLessThan (p->getReadout (4), -3.0f);
+            expectWithinAbsoluteError (p->getReadout (0), 0.0f, 3.0f);
+
+            // silence / freeze: corrections stay where they are
+            set (*p, "freeze", 1.0f);
+            const float before = p->getReadout (4);
+            auto silence = Stereo ((int) kFs);
+            run (*p, silence);
+            expectWithinAbsoluteError (p->getReadout (4), before, 1.0e-4f);
+        }
+    }
+};
+
+static NewPluginTests newPluginTests;
 
 static RegistryTests registryTests;
 static SwirlTests swirlTests;

@@ -134,6 +134,93 @@ EditorSpec EditorSpec::forPlugin (ElitePlugin& p)
                      { "SUGGESTED IN", M::value, EliteMaster::suggestedInput, 0.0f, "dB" } };
         s.width = 980; s.height = 700;
     }
+    else if (id == "elite-transient")
+    {
+        s.tabsParam = "speed";
+        s.knobRows = { { K { "attack", "ATTACK", true }, K { "sustain", "SUSTAIN", true }, K { "mix", "MIX" }, K { "output", "OUTPUT" } } };
+        s.meters = { { "IN", M::inputPeak }, { "SHAPE", M::value, EliteTransient::gainNow, 15.0f, "dB+-" }, { "OUT", M::outputPeak } };
+        s.width = 980; s.height = 640;
+    }
+    else if (id == "elite-multiband")
+    {
+        s.knobRows = { { K { "low_thr", "LOW THR", true }, K { "low_ratio", "LOW RATIO" }, K { "low_gain", "LOW GAIN" }, K { "low_x", "LOW / MID" } },
+                       { K { "mid_thr", "MID THR", true }, K { "mid_ratio", "MID RATIO" }, K { "mid_gain", "MID GAIN" }, K { "high_x", "MID / HIGH" } },
+                       { K { "high_thr", "HIGH THR", true }, K { "high_ratio", "HIGH RATIO" }, K { "high_gain", "HIGH GAIN" } },
+                       { K { "attack", "ATTACK" }, K { "release", "RELEASE" }, K { "mix", "MIX" }, K { "output", "OUTPUT" } } };
+        s.meters = { { "IN", M::inputPeak }, { "LOW GR", M::reduction, EliteMultiband::lowGr, 18.0f },
+                     { "MID GR", M::reduction, EliteMultiband::midGr, 18.0f }, { "HIGH GR", M::reduction, EliteMultiband::highGr, 18.0f },
+                     { "OUT", M::outputPeak } };
+        s.width = 1080; s.height = 1120;
+    }
+    else if (id == "elite-width")
+    {
+        s.knobRows = { { K { "width", "WIDTH", true }, K { "mono_below", "MONO BELOW", true }, K { "output", "OUTPUT" } } };
+        s.meters = { { "IN", M::inputPeak }, { "CORRELATION", M::value, EliteWidth::correlation, 0.0f, "corr" },
+                     { "SIDE", M::value, EliteWidth::sideLevel, 0.0f, "%" }, { "OUT", M::outputPeak } };
+        s.width = 980; s.height = 620;
+    }
+    else if (id == "elite-hush")
+    {
+        s.knobRows = { { K { "amount", "AMOUNT", true }, K { "reduction", "REDUCTION", true }, K { "from", "FROM" }, K { "output", "OUTPUT" } } };
+        s.toggles = { { "listen", "LISTEN (REMOVED ONLY)" } };
+        s.meters = { { "IN", M::inputPeak }, { "NOISE FLOOR", M::value, EliteHush::noiseDb, 0.0f, "dBFS" },
+                     { "REMOVED", M::reduction, EliteHush::removedDb, 24.0f }, { "OUT", M::outputPeak } };
+        s.width = 980; s.height = 680;
+    }
+    else if (id == "elite-de-ess")
+    {
+        s.knobRows = { { K { "freq", "FREQUENCY", true }, K { "threshold", "THRESHOLD", true }, K { "range", "RANGE" }, K { "output", "OUTPUT" } } };
+        s.toggles = { { "listen", "LISTEN (ESS ONLY)" } };
+        s.meters = { { "IN", M::inputPeak }, { "ESS LEVEL", M::value, EliteDeEss::sibilanceDb, 0.0f, "dBFS" },
+                     { "REDUCTION", M::reduction, EliteDeEss::gr, 20.0f }, { "OUT", M::outputPeak } };
+        s.width = 980; s.height = 680;
+    }
+    else if (id == "elite-doubler")
+    {
+        s.knobRows = { { K { "amount", "AMOUNT", true }, K { "width", "WIDTH", true }, K { "delay", "DELAY" } },
+                       { K { "drift", "DRIFT" }, K { "tone", "LOW CUT" }, K { "output", "OUTPUT" } } };
+        s.meters = { { "IN", M::inputPeak }, { "SPREAD", M::value, EliteDoubler::spreadMs, 0.0f, "ms" }, { "OUT", M::outputPeak } };
+        s.width = 980; s.height = 800;
+    }
+    else if (id == "elite-console")
+    {
+        s.tabsParam = "character";
+        s.knobRows = { { K { "drive", "DRIVE", true }, K { "crosstalk", "CROSSTALK" }, K { "output", "OUTPUT" } } };
+        s.meters = { { "IN", M::inputPeak }, { "SATURATION", M::reduction, EliteConsole::driveDb, 12.0f }, { "OUT", M::outputPeak } };
+        s.width = 980; s.height = 660;
+    }
+    else if (id == "elite-lofi")
+    {
+        s.knobRows = { { K { "wow", "WOW", true }, K { "flutter", "FLUTTER" }, K { "bits", "BITS" }, K { "rate", "SAMPLE RATE" } },
+                       { K { "vinyl", "VINYL", true }, K { "tone", "TONE" }, K { "mix", "MIX" }, K { "output", "OUTPUT" } } };
+        s.meters = { { "IN", M::inputPeak }, { "OUT", M::outputPeak } };
+        s.width = 980; s.height = 820;
+    }
+    else if (id == "elite-tune")
+    {
+        s.tabsParam = "scale";
+        s.knobRows = { { K { "speed", "RETUNE SPEED", true }, K { "amount", "AMOUNT", true }, K { "low", "LOWEST NOTE" },
+                         K { "high", "HIGHEST NOTE" }, K { "output", "OUTPUT" } } };
+        s.choices = { { "key", "KEY" } };
+        s.meters = { { "IN", M::inputPeak }, { "PITCH", M::value, EliteTune::detectedHz, 0.0f, "pitch" },
+                     { "NOTE", M::value, EliteTune::targetMidi, 0.0f, "midi" },
+                     { "CORRECTION", M::value, EliteTune::correctionCents, 100.0f, "cents" }, { "OUT", M::outputPeak } };
+        s.width = 1080; s.height = 700;
+    }
+    else if (id == "elite-balance")
+    {
+        s.tabsParam = "speed";
+        s.knobRows = { { K { "amount", "AMOUNT", true }, K { "tilt", "TILT", true }, K { "range", "RANGE" }, K { "output", "OUTPUT" } } };
+        s.toggles = { { "freeze", "FREEZE" } };
+        s.meters.push_back ({ "IN", M::inputPeak });
+        for (int b = 0; b < EliteBalance::kBands; ++b)
+        {
+            const int hz = (int) EliteBalance::bandHz (b);   // 62, 125, 250, 500, 1K .. 8K
+            s.meters.push_back ({ hz < 1000 ? juce::String (hz) : juce::String (hz / 1000) + "K", M::value, b, 12.0f, "dB+-" });
+        }
+        s.meters.push_back ({ "OUT", M::outputPeak });
+        s.width = 1320; s.height = 700;
+    }
     else
         s = autoSpec (p);
     return s;
@@ -508,7 +595,7 @@ void EliteEditor::paintMeters (juce::Graphics& g)
             g.drawHorizontalLine (juce::roundToInt (y), bar.getX(), bar.getRight());
         }
 
-        float frac = 0.0f;
+        float frac = 0.0f, centreFrac = 0.0f;   // centreFrac: -1..1 bar drawn from the middle
         juce::Colour c = acc;
         bool fromTop = false;
         switch (m.kind)
@@ -519,6 +606,36 @@ void EliteEditor::paintMeters (juce::Graphics& g)
                 break;
             case M::value:
             {
+                if (m.unit == "dB+-" || m.unit == "cents")
+                {
+                    // signed values (boost / cut, sharp / flat): the bar grows up or down from the middle
+                    const float half = m.range > 0.0f ? m.range : 12.0f;
+                    const float v = juce::jlimit (-half, half, shown);
+                    centreFrac = v / half;
+                    c = v < 0.0f ? kAmber : acc;
+                    text = (v > 0.05f ? "+" : "") + (m.unit == "cents" ? juce::String (juce::roundToInt (shown)) : juce::String (shown, 1));
+                    break;
+                }
+                if (m.unit == "midi")
+                {
+                    static const char* names[] { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+                    const int note = juce::roundToInt (shown);
+                    frac = note <= 0 ? 0.0f : juce::jlimit (0.0f, 1.0f, (shown - 36.0f) / 48.0f);
+                    text = note <= 0 ? juce::String ("--") : juce::String (names[note % 12]) + juce::String (note / 12 - 1);
+                    break;
+                }
+                if (m.unit == "pitch")
+                {
+                    frac = shown < 1.0f ? 0.0f : juce::jlimit (0.0f, 1.0f, std::log2 (shown / 50.0f) / std::log2 (20.0f));
+                    text = shown < 1.0f ? juce::String ("--") : juce::String (juce::roundToInt (shown));
+                    break;
+                }
+                if (m.unit == "dBFS")
+                {
+                    frac = shown <= -95.0f ? 0.0f : juce::jlimit (0.0f, 1.0f, (shown + 96.0f) / 96.0f);
+                    text = shown <= -95.0f ? juce::String ("--") : juce::String (shown, 1);
+                    break;
+                }
                 // value meters (LUFS, dBTP, ms) show a number and a bar over a sensible range
                 const bool lufs = m.unit == "LUFS";
                 const bool corr = m.unit == "corr", hz = m.unit == "Hz";
@@ -537,6 +654,20 @@ void EliteEditor::paintMeters (juce::Graphics& g)
                 text = shown <= -59.0f ? "-inf" : juce::String (shown, 1);
                 if (shown > -0.5f) c = colours::meterRed;
                 break;
+        }
+        if (centreFrac != 0.0f)
+        {
+            const float mid = bar.getCentreY(), h = bar.getHeight() * 0.5f * std::abs (centreFrac);
+            auto fill = centreFrac > 0.0f ? bar.withTop (mid - h).withBottom (mid) : bar.withTop (mid).withBottom (mid + h);
+            g.setColour (c);
+            g.fillRoundedRectangle (fill, 2.0f * U);
+            g.setColour (c.withAlpha (0.22f));
+            g.fillRoundedRectangle (fill.expanded (3.0f * U, 0.0f), 4.0f * U);
+        }
+        if (m.kind == M::value && (m.unit == "dB+-" || m.unit == "cents"))
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.35f));   // the zero line
+            g.drawHorizontalLine (juce::roundToInt (bar.getCentreY()), bar.getX(), bar.getRight());
         }
         if (frac > 0.0f)
         {

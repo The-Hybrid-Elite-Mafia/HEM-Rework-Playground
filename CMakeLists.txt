@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(HEMPlayground VERSION 0.9.0 LANGUAGES C CXX)
+project(HEMPlayground VERSION 0.10.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,16 @@ set(PG_CORE_SOURCES
     Source/Plugins/EliteDelay.cpp
     Source/Plugins/EliteMaster.cpp
     Source/Plugins/EliteSwirl.cpp
+    Source/Plugins/EliteTransient.cpp
+    Source/Plugins/EliteMultiband.cpp
+    Source/Plugins/EliteWidth.cpp
+    Source/Plugins/EliteHush.cpp
+    Source/Plugins/EliteDeEss.cpp
+    Source/Plugins/EliteDoubler.cpp
+    Source/Plugins/EliteConsole.cpp
+    Source/Plugins/EliteLofi.cpp
+    Source/Plugins/EliteTune.cpp
+    Source/Plugins/EliteBalance.cpp
     Source/Plugins/PluginRegistry.cpp
     Source/Engine/PlaygroundEngine.cpp
     Source/Engine/MediaLoader.cpp

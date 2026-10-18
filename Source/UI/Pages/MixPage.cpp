@@ -407,13 +407,14 @@ void PluginLibrary::paint (juce::Graphics& g)
         g.fillRoundedRectangle (r.withWidth (5.0f), 2.0f);
         g.setColour (hover == i ? acc : juce::Colours::white.withAlpha (0.08f));
         g.drawRoundedRectangle (r, 5.0f, 1.0f);
-        auto t = r.reduced (12.0f, 4.0f);
-        g.setFont (PlaygroundLookAndFeel::font (14.0f));
+        auto t = r.reduced (12.0f, r.getHeight() < 40.0f ? 2.0f : 4.0f);
+        const bool compact = r.getHeight() < 40.0f;   // 19 plugins on a short window: name + one line of blurb
+        g.setFont (PlaygroundLookAndFeel::font (compact ? 12.5f : 14.0f));
         g.setColour (colours::paper);
-        g.drawText (all[(size_t) i]->name, t.removeFromTop (t.getHeight() * 0.48f), juce::Justification::bottomLeft, true);
-        g.setFont (PlaygroundLookAndFeel::font (10.5f, false));
+        g.drawText (all[(size_t) i]->name, t.removeFromTop (t.getHeight() * (compact ? 0.52f : 0.48f)), juce::Justification::bottomLeft, true);
+        g.setFont (PlaygroundLookAndFeel::font (compact ? 9.5f : 10.5f, false));
         g.setColour (colours::paperDim);
-        g.drawFittedText (all[(size_t) i]->blurb, t.toNearestInt(), juce::Justification::topLeft, 2, 0.85f);
+        g.drawFittedText (all[(size_t) i]->blurb, t.toNearestInt(), juce::Justification::topLeft, compact ? 1 : 2, 0.85f);
     }
     auto foot = getLocalBounds().removeFromBottom (60).reduced (10, 4);
     g.setFont (PlaygroundLookAndFeel::font (11.0f, false));

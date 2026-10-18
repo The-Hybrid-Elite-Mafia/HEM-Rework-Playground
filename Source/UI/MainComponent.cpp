@@ -23,7 +23,7 @@ namespace
         mRename = 20, mRemoveTrack, mClearSolo, mClearMute, mResetFader,
         mUndo = 30, mRedo,
         mTabEdit = 40, mTabMix, mTabForge, mTabMaster, mZoomIn, mZoomOut, mFit, mCloseWindows,
-        mPluginBase = 60,
+        mPluginBase = 300,   // one id per Elite plugin (room for growth past the other ranges)
         mPresetsFolder = 80, mSongsFolder,
         mShortcuts = 90, mAbout,
         mRecentBase = 100
