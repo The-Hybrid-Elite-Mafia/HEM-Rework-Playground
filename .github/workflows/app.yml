@@ -66,7 +66,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          & build-app\Release\hem_pg_tests.exe *> engine-tests.txt
+          if (-not (Test-Path build-app\hc-engine\Release\hem_pg_tests.exe)) { Write-Host '::error::hem_pg_tests.exe was not built'; exit 1 }
+          & build-app\hc-engine\Release\hem_pg_tests.exe *> engine-tests.txt
           $rc = $LASTEXITCODE
           $out = Get-Content engine-tests.txt
           $m = (($out | Select-String -Pattern '^!!!|\[FAIL\]|HEM ENGINE TEST SUMMARY' | Select-Object -First 60 | ForEach-Object { "$_" }) -join "`n").Replace('%','%25').Replace("`n",'%0A')
@@ -77,7 +78,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          & build-app\Release\hem_pg_bench.exe *> bench.txt
+          if (-not (Test-Path build-app\hc-engine\Release\hem_pg_bench.exe)) { Write-Host '::error::hem_pg_bench.exe was not built'; exit 1 }
+          & build-app\hc-engine\Release\hem_pg_bench.exe *> bench.txt
           $cpu = Get-CimInstance Win32_Processor | ForEach-Object { "$($_.Name.Trim()), $($_.NumberOfCores) cores" }
           $m = ((@($cpu) + (Get-Content bench.txt)) -join "`n").Replace('%','%25').Replace("`n",'%0A')
           Write-Host "::notice title=cpu::$m"

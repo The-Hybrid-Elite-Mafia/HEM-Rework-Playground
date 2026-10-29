@@ -241,7 +241,13 @@ bool App::loadArt (std::string& error)
 
 bool App::resizeTargets (std::string& error)
 {
-    const int w = window.pixelWidth(), h = window.pixelHeight();
+    int w = window.pixelWidth(), h = window.pixelHeight();
+    // Test screenshots draw off-screen at the asked size (a CI desktop is smaller than 4K).
+    if (! options.screenshot.empty() && options.exitAfter > 0.0 && options.width > 0 && options.height > 0)
+    {
+        w = options.width;
+        h = options.height;
+    }
     const auto c = hc::ui::Canvas::fit ((float) w, (float) h);
     if (haveCanvas && c == canvas) return true;
     if (! renderer.setTargetSize (w, h, &error)) return false;
@@ -327,6 +333,7 @@ bool App::start (const StartOptions& o, std::string& error)
     if (settings.importedCount() > 0) status ("Welcome to 0.11: your " + std::to_string (settings.importedCount()) + " settings from the old version came along.");
     if (! o.stems.empty()) importFiles (o.stems);
     if (! o.session.empty()) openSession (o.session);
+    if (o.startTab >= 0) showTab (o.startTab);   // the import above jumps to EDIT; --tab wins
     return true;
 }
 
