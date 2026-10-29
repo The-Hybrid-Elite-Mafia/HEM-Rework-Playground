@@ -6,6 +6,9 @@ project(HEMPlaygroundEngine VERSION 0.11.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# No link-time code generation for the engine, also when an app that turns it on builds it (renders must
+# match the verified engine exactly).
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
 
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")

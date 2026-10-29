@@ -1,0 +1,32 @@
+HEM REWORK PLAYGROUND - THIRD-PARTY NOTICES
+
+The HEM Rework Playground is free software under the GNU General Public License v3
+(GPL-3.0.txt next to the program). Everything listed here is free and allowed inside a
+GPLv3 program.
+
+The Hybrid Core
+  Hybrid Elite Mafia's own audio framework (sound card, graphics, faceplates), GPLv3.
+
+ASIO
+  ASIO is a trademark and software of Steinberg Media Technologies GmbH.
+  This program includes host code from the Steinberg ASIO SDK 2.3.4, used under the SDK's
+  GPLv3 licence option (the program itself is GPLv3). The SDK licence text is in the
+  "licenses" folder.
+
+Poppins
+  Poppins Medium / SemiBold / Bold, Copyright 2020 The Poppins Project Authors,
+  SIL Open Font License 1.1 (licenses\Poppins-OFL.txt). Bundled unmodified.
+
+stb
+  stb_image, stb_image_resize2, stb_image_write, stb_truetype and stb_vorbis by Sean Barrett
+  and contributors - public domain or MIT.
+
+dr_libs
+  dr_wav, dr_flac and dr_mp3 by David Reid - public domain (Unlicense) or MIT No Attribution.
+
+pugixml
+  pugixml 1.14 by Arseny Kapoulkine - MIT licence (licenses\pugixml-LICENSE.txt).
+
+HEM Sound Pack (Band Forge's recorded instruments)
+  Built from free sample sets at fixed versions; where each recording comes from and its licence
+  are listed in the pack's LICENSES.txt and CREDITS.txt (Sounds\HEM Sound Pack).

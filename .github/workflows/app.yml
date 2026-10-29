@@ -1,0 +1,249 @@
+name: Build, test and package the Playground on The Hybrid Core
+
+# HEM Rework Playground 0.11 (hc-app/ + hc-engine/ + The Hybrid Core submodule) on a Windows machine in the
+# cloud: builds with Visual Studio 2022 and the Steinberg ASIO SDK (fetched, SHA-512 checked, never committed),
+# runs the app and engine tests, measures CPU time, runs the engine tests again under MSVC's AddressSanitizer,
+# takes screenshots of every page and some plug-in windows (software OpenGL), makes the installer and
+# publishes it as a Release. Manual only (workflow_dispatch). Results are notices on the run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish the installer as a Release (yes / no)"
+        required: false
+        default: "yes"
+
+permissions:
+  contents: write
+
+jobs:
+  app:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Check out the repository and The Hybrid Core
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Fetch the Steinberg ASIO SDK (GPLv3 option, SHA-512 checked, not committed)
+        shell: pwsh
+        run: |
+          & external\HybridCore\tools\fetch-asio-sdk.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $lic = Get-ChildItem external\HybridCore\external\asiosdk\sdk -Recurse -File | Where-Object { $_.Name -match 'licen[cs]e' -and $_.Extension -in '.txt','.rtf','.pdf','.md','' } | Select-Object -First 1
+          if ($lic) { "ASIO_LICENSE=$($lic.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append; Write-Host "::notice title=asio::SDK ready, licence file $($lic.Name)" }
+          else { Write-Host "::notice title=asio::SDK ready (no separate licence file found in the archive)" }
+
+      - name: Configure (C++23, MSVC, ASIO required)
+        run: cmake -S hc-app -B build-app -G "Visual Studio 17 2022" -A x64 -DHC_REQUIRE_ASIO_SDK=ON
+
+      - name: Build the app, its tests, the engine tests and the CPU bench
+        shell: pwsh
+        run: |
+          $out = cmake --build build-app --config Release --parallel --target ReworkPlayground hem_app_tests hem_pg_tests hem_pg_bench 2>&1
+          $rc = $LASTEXITCODE
+          $out | Set-Content app-build.txt
+          $out | Select-String -Pattern ': (fatal )?error ' | Select-Object -First 40 | ForEach-Object { Write-Host "::error title=compile::$($_.Line.Trim())" }
+          $w = ($out | Select-String -Pattern ': warning C' | ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique)
+          Write-Host "::notice title=build::exit $rc, $($w.Count) unique compiler warnings"
+          $w | Select-Object -First 25 | ForEach-Object { Write-Host "::warning title=compile::$_" }
+          exit $rc
+
+      - name: App tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          & build-app\Release\hem_app_tests.exe *> app-tests.txt
+          $rc = $LASTEXITCODE
+          $out = Get-Content app-tests.txt
+          $m = (($out | Select-String -Pattern '\[FAIL\]|HEM APP TEST SUMMARY' | Select-Object -First 60 | ForEach-Object { "$_" }) -join "`n").Replace('%','%25').Replace("`n",'%0A')
+          Write-Host "::notice title=app tests::$m"
+          exit $rc
+
+      - name: Engine tests (inside the app build)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          & build-app\Release\hem_pg_tests.exe *> engine-tests.txt
+          $rc = $LASTEXITCODE
+          $out = Get-Content engine-tests.txt
+          $m = (($out | Select-String -Pattern '^!!!|\[FAIL\]|HEM ENGINE TEST SUMMARY' | Select-Object -First 60 | ForEach-Object { "$_" }) -join "`n").Replace('%','%25').Replace("`n",'%0A')
+          Write-Host "::notice title=engine tests::$m"
+          exit $rc
+
+      - name: CPU time per block (this cloud machine, not Steven's PC)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          & build-app\Release\hem_pg_bench.exe *> bench.txt
+          $cpu = Get-CimInstance Win32_Processor | ForEach-Object { "$($_.Name.Trim()), $($_.NumberOfCores) cores" }
+          $m = ((@($cpu) + (Get-Content bench.txt)) -join "`n").Replace('%','%25').Replace("`n",'%0A')
+          Write-Host "::notice title=cpu::$m"
+
+      - name: Software OpenGL for the screenshots (Mesa llvmpipe, CI only, never shipped)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          & external\HybridCore\tools\ci\fetch-mesa.ps1 -TargetDirs build-app\Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Made-up stems for the screenshots
+        run: python -I hc-app/tests/make_demo_stems.py demo-stems
+
+      - name: Screenshots of every page and some plug-in windows
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $exe = "build-app\Release\HEM Rework Playground.exe"
+          $runs = @(
+            @{ name = 'edit';    args = @('--tab','0') },
+            @{ name = 'mix';     args = @('--tab','1') },
+            @{ name = 'forge';   args = @('--tab','2') },
+            @{ name = 'master';  args = @('--tab','3') },
+            @{ name = 'eq';      args = @('--tab','1','--plugin','elite-eq') },
+            @{ name = 'swirl';   args = @('--tab','1','--plugin','elite-swirl') },
+            @{ name = 'channel'; args = @('--tab','1','--plugin','elite-channel') },
+            @{ name = 'master-plugin'; args = @('--tab','3','--plugin','elite-master') },
+            @{ name = 'edit-4k'; args = @('--tab','0','--size','3840','2160') }
+          )
+          $lines = @()
+          foreach ($r in $runs) {
+            $png = Join-Path (Resolve-Path shots) "$($r.name).png"
+            $all = @('--offline','--exit-after','6','--screenshot',$png,'--stems','demo-stems') + $r.args
+            $p = Start-Process -FilePath $exe -ArgumentList $all -PassThru -Wait -NoNewWindow
+            $ok = Test-Path $png
+            $lines += "$($r.name): exit $($p.ExitCode), picture $(if ($ok) { 'made' } else { 'MISSING' })"
+          }
+          Get-ChildItem shots | ForEach-Object { $lines += "$($_.Name) $([math]::Round($_.Length / 1kb)) KB" }
+          Write-Host "::notice title=screenshots::$(($lines -join "`n").Replace('%','%25').Replace("`n",'%0A'))"
+
+      - name: Keep the screenshots on the ci-screenshots branch (UI pictures only, made-up audio)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          dir=$(mktemp -d)
+          mkdir -p "$dir/app"
+          cp shots/*.png "$dir/app/" 2>/dev/null || true
+          cd "$dir"
+          git init -q
+          git config user.name "HEM CI"
+          git config user.email "ci@users.noreply.github.com"
+          echo "Playground UI screenshots from run ${{ github.run_id }} (commit ${{ github.sha }})" > README.md
+          git add -A
+          git commit -qm "Screenshots from run ${{ github.run_id }}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:refs/heads/ci-screenshots
+
+      - name: Smoke test - the app starts on this machine's default sound setup and stays open
+        shell: pwsh
+        run: |
+          $exe = "build-app\Release\HEM Rework Playground.exe"
+          $start = Get-Date
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 25
+          if ($p.HasExited) {
+            Write-Host "::error title=smoke::The app closed by itself (exit code $($p.ExitCode))"
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $start } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -in 'Application Error', 'Windows Error Reporting' } | ForEach-Object { Write-Host $_.Message }
+            exit 1
+          }
+          Write-Host "::notice title=smoke::still running after 25 s with no sound card (WASAPI shared default, falls back cleanly)"
+          Stop-Process -Id $p.Id -Force
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup -y --no-progress
+
+      - name: Build the HEM Sound Pack (Band Forge's recorded instruments, free sources at fixed commits)
+        shell: bash
+        run: |
+          set -e
+          python -m pip install --quiet numpy scipy soundfile
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/sgossner/VSCO-2-CE.git sp/vsco
+          git -C sp/vsco sparse-checkout set "Strings/Solo Violin/Arco Vib" "Strings/Solo Violin/spic" \
+            "Strings/Cello Section/susvib" "Strings/Viola Section/susvib" "Strings/Violin Section/susVib" \
+            "Strings/Solo Contrabass/Pizz" "Keys/Upright Piano"
+          git -C sp/vsco checkout --quiet 440300901dfe9275fd84e0b7763af1f8443ae62e
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/sfzinstruments/virtuosity_drums.git sp/vd
+          git -C sp/vd sparse-checkout set "Samples/mid" "Samples/kickmic" "Samples/snaremic"
+          git -C sp/vd checkout --quiet 9f04cf9a734527edfbb0a4eee1f674e45bbf71bc
+          python -I Tools/build_sound_pack.py sp/vsco sp/vd soundpack
+          du -sh soundpack
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          $ver = (Select-String -Path hc-app\CMakeLists.txt -Pattern 'VERSION (\d+\.\d+\.\d+)').Matches[0].Groups[1].Value
+          $args = @("/DBuildDir=$env:GITHUB_WORKSPACE\build-app\Release", "/DAppVersion=$ver", "/DSoundPackDir=$env:GITHUB_WORKSPACE\soundpack")
+          if ($env:ASIO_LICENSE) { $args += "/DAsioLicense=$env:ASIO_LICENSE" }
+          & $iscc @args Installer\ReworkPlayground.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $f = Get-ChildItem Installer\Output\*.exe | Select-Object -First 1
+          Write-Host "::notice title=installer::$($f.Name) $([math]::Round($f.Length / 1mb, 1)) MB"
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReworkPlayground-0.11-Windows-Installer
+          path: Installer/Output/*.exe
+          if-no-files-found: error
+
+      - name: Publish the installer as a Release
+        if: ${{ github.event.inputs.release != 'no' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          EXE=$(ls Installer/Output/*.exe | head -1)
+          VER=$(sed -n 's/^ *VERSION \([0-9.]*\)$/\1/p' hc-app/CMakeLists.txt | head -1)
+          test -n "$VER"
+          APP=$(grep "HEM APP TEST SUMMARY" app-tests.txt || true)
+          ENG=$(grep "HEM ENGINE TEST SUMMARY" engine-tests.txt || true)
+          gh release create "playground-$VER-run-${{ github.run_id }}" "$EXE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${{ github.sha }}" \
+            --title "HEM Rework Playground $VER on The Hybrid Core (Windows PC)" \
+            --notes "Windows installer built in the cloud from commit ${{ github.sha }}. No JUCE: The Hybrid Core (WASAPI shared / exclusive, ASIO). $APP. $ENG. Not code-signed: if Windows SmartScreen says 'Windows protected your PC', click More info, then Run anyway."
+
+  asan:
+    name: Engine tests under MSVC AddressSanitizer
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Build the engine tests with /fsanitize=address
+        shell: pwsh
+        run: |
+          cmake -S hc-engine -B build-asan -G "Visual Studio 17 2022" -A x64 "-DCMAKE_CXX_FLAGS=/fsanitize=address /Zi /EHsc" "-DCMAKE_C_FLAGS=/fsanitize=address /Zi"
+          $out = cmake --build build-asan --config Release --parallel --target hem_pg_tests 2>&1
+          $rc = $LASTEXITCODE
+          $out | Select-String -Pattern ': (fatal )?error ' | Select-Object -First 30 | ForEach-Object { Write-Host "::error title=asan compile::$($_.Line.Trim())" }
+          exit $rc
+
+      - name: Run them (any memory error stops the run with a report)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $tools = Get-ChildItem "$vs\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1
+          $env:PATH = "$($tools.FullName)\bin\Hostx64\x64;$env:PATH"
+          $env:ASAN_OPTIONS = "halt_on_error=1:detect_leaks=0"
+          & build-asan\Release\hem_pg_tests.exe *> asan-tests.txt
+          $rc = $LASTEXITCODE
+          $out = Get-Content asan-tests.txt
+          $sum = $out | Select-String -Pattern 'HEM ENGINE TEST SUMMARY'
+          $err = $out | Select-String -Pattern 'ERROR: AddressSanitizer|SUMMARY: AddressSanitizer' | Select-Object -First 10
+          $m = ((@("exit $rc") + @($sum | ForEach-Object { "$_" }) + @($err | ForEach-Object { "$_" })) -join "`n").Replace('%','%25').Replace("`n",'%0A')
+          Write-Host "::notice title=asan::$m"
+          exit $rc

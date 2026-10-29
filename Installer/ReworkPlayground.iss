@@ -1,26 +1,31 @@
 ; HEM Rework Playground - Inno Setup 6 script
 ;
-; Build:  iscc /DBuildDir="<path to ReworkPlayground_artefacts\Release>" /DAppVersion=0.1.0 Installer\ReworkPlayground.iss
+; Build:  iscc /DBuildDir="<build-app\Release>" /DAppVersion=0.11.0 [/DAsioLicense=<SDK licence file>] Installer\ReworkPlayground.iss
+;
+; 0.11 is built on The Hybrid Core (no JUCE): the program, its assets folder (faceplate, Poppins, logo)
+; and the licences. Same AppId, folder and file type as 0.10, so it installs over it in place.
 ;
 ; A separate app from Hybrid Studio: its own AppId, install folder, settings and file type, so the
 ; two never touch each other.
 ;
 ; Upgrade safety:
 ;   - AppId is fixed forever -> new versions install over the old one in place.
-;   - Settings live in %APPDATA%\Hybrid Elite Mafia\Rework Playground.settings and user presets in
+;   - Settings live in %APPDATA%\Hybrid Elite Mafia\Rework Playground\settings.json (0.11 reads the old
+;     Rework Playground.settings once and never changes it) and user presets in
 ;     %APPDATA%\Hybrid Elite Mafia\Rework Playground\Presets (written by the app, never listed here,
 ;     so upgrades and uninstall leave them alone).
 ;   - Songs / exports live in Documents\Hybrid Elite Mafia\Rework Playground; created with
 ;     uninsneveruninstall so your work survives uninstall and upgrades.
-;   - Faceplate art, fonts and icon are inside the exe; static MSVC runtime -> no VC++ redistributable.
+;   - Faceplate art, fonts and logo are in {app}\assets (replaced on every upgrade); static MSVC runtime ->
+;     no VC++ redistributable.
 ;   - /DSoundPackDir=<folder> bundles the HEM Sound Pack (Band Forge's recorded instruments, built by
 ;     Tools/build_sound_pack.py) into {app}\Sounds\HEM Sound Pack, replaced on every upgrade.
 
 #ifndef AppVersion
-  #define AppVersion "0.6.0"
+  #define AppVersion "0.11.0"
 #endif
 #ifndef BuildDir
-  #define BuildDir "..\build\ReworkPlayground_artefacts\Release"
+  #define BuildDir "..\build-app\Release"
 #endif
 
 #define AppName      "HEM Rework Playground"
@@ -75,8 +80,15 @@ Name: "{userdocs}\Hybrid Elite Mafia\Rework Playground\Library"; Flags: uninsnev
 
 [Files]
 Source: "{#BuildDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "EULA.txt"; DestDir: "{app}"; DestName: "License.txt"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "GPL-3.0.txt"; Flags: ignoreversion
+Source: "THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\external\HybridCore\assets\fonts\OFL.txt"; DestDir: "{app}\licenses"; DestName: "Poppins-OFL.txt"; Flags: ignoreversion
+Source: "..\hc-engine\external\pugixml\LICENSE.md"; DestDir: "{app}\licenses"; DestName: "pugixml-LICENSE.txt"; Flags: ignoreversion
+#ifdef AsioLicense
+Source: "{#AsioLicense}"; DestDir: "{app}\licenses"; DestName: "Steinberg-ASIO-SDK-LICENSE.txt"; Flags: ignoreversion
+#endif
 #ifdef SoundPackDir
 Source: "{#SoundPackDir}\*"; DestDir: "{app}\Sounds\HEM Sound Pack"; Flags: ignoreversion recursesubdirs createallsubdirs
 
