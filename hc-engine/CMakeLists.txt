@@ -34,21 +34,47 @@ target_link_libraries(hem_pg_registry PUBLIC ${HEM_PG_FX_LIBS})
 
 add_library(hem_pg_pugixml STATIC external/pugixml/pugixml.cpp)
 target_include_directories(hem_pg_pugixml PUBLIC external/pugixml)
-if(NOT MSVC)
-    target_compile_options(hem_pg_pugixml PRIVATE -w)
-endif()
+target_compile_options(hem_pg_pugixml PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>)
+
+# Free audio decoders (dr_libs, stb_vorbis: public domain / MIT-0), compiled once.
+add_library(hem_pg_decoders STATIC external/Decoders.c)
+target_include_directories(hem_pg_decoders PUBLIC external/dr_libs external/stb)
+target_compile_options(hem_pg_decoders PRIVATE $<IF:$<C_COMPILER_ID:MSVC>,/W0,-w>)
 
 add_library(hem_pg_presets STATIC presets/Presets.cpp presets/LegacyFactoryPresets.cpp)
 target_include_directories(hem_pg_presets PUBLIC presets)
 target_link_libraries(hem_pg_presets PUBLIC hem_pg_common PRIVATE hem_pg_pugixml)
 
+# The mixer engine: media, mixer, sessions, undo, export.
+add_library(hem_pg_engine STATIC
+    engine/Tree.cpp
+    engine/PlaygroundEngine.cpp
+    engine/media/MediaLoader.cpp
+    engine/media/SincResampler.cpp
+    engine/session/SessionFile.cpp
+    engine/session/UndoHistory.cpp
+    engine/export/WavFile.cpp
+    engine/export/Exporter.cpp
+    engine/export/Mp3Encoder.cpp)
+target_include_directories(hem_pg_engine PUBLIC engine)
+target_link_libraries(hem_pg_engine PUBLIC hem_pg_registry hem_pg_presets PRIVATE hem_pg_pugixml hem_pg_decoders)
+if(WIN32)
+    target_link_libraries(hem_pg_engine PRIVATE mf mfplat mfreadwrite mfuuid ole32)
+endif()
+
 add_executable(hem_pg_render tools/render/main.cpp)
 target_link_libraries(hem_pg_render PRIVATE hem_pg_registry)
 
+add_executable(hem_pg_session_check tools/session-check/main.cpp)
+target_link_libraries(hem_pg_session_check PRIVATE hem_pg_engine hem_pg_decoders)
+
+add_executable(hem_pg_bench tools/bench/main.cpp)
+target_link_libraries(hem_pg_bench PRIVATE hem_pg_engine)
+
 enable_testing()
-add_executable(hem_pg_tests tests/TestMain.cpp tests/PluginTests.cpp tests/EngineCoreTests.cpp)
+add_executable(hem_pg_tests tests/TestMain.cpp tests/PluginTests.cpp tests/EngineCoreTests.cpp tests/MixerTests.cpp)
 target_include_directories(hem_pg_tests PRIVATE tests)
-target_link_libraries(hem_pg_tests PRIVATE hem_pg_registry hem_pg_presets)
+target_link_libraries(hem_pg_tests PRIVATE hem_pg_engine hem_pg_registry hem_pg_presets hem_pg_decoders)
 add_test(NAME hem_pg_tests COMMAND hem_pg_tests)
 
 

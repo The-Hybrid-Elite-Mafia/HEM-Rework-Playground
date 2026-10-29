@@ -2,7 +2,8 @@ name: Build and test the C++23 Playground engine
 
 # The new HEM Rework Playground engine (hc-engine/: C++23, no JUCE) on a Windows machine in the cloud:
 # builds every plug-in engine with Visual Studio 2022, runs the engine tests, then renders 1,322
-# scenarios through the 0.10.0 JUCE plug-ins and the new engines and compares every output.
+# scenarios through the 0.10.0 JUCE plug-ins and the new engines and compares every output, then opens
+# songs saved by 0.10.0 (sessions, stems in every format, exports) with the new engine.
 # Manual only (workflow_dispatch). Results are written as notices on the run (readable from the API).
 
 on:
@@ -45,6 +46,14 @@ jobs:
           Write-Host "::notice title=engine tests::$summary"
           exit $rc
 
+      - name: Measure CPU time per block (this cloud machine, not Steven's PC)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-CimInstance Win32_Processor | ForEach-Object { Write-Host "::notice title=cpu::$($_.Name), $($_.NumberOfCores) cores" }
+          & build-engine\Release\hem_pg_bench.exe *> bench.txt
+          Get-Content bench.txt | ForEach-Object { Write-Host "::notice title=cpu::$_" }
+
       - name: Build the 0.10.0 plug-ins as a renderer (JUCE 8.0.15, only for the comparison)
         run: |
           cmake -S hc-engine/tools/legacy-render -B build-legacy -G "Visual Studio 17 2022" -A x64
@@ -53,16 +62,35 @@ jobs:
       - name: Compare every render, 0.10.0 vs the new engines
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Continue'
+          $legacy = Get-ChildItem build-legacy -Recurse -Include LegacyRender.exe, legacy-render.exe | Select-Object -First 1
+          if (-not $legacy) { Write-Host "::error title=legacy render::the 0.10.0 renderer was not built"; exit 1 }
+          Write-Host "::notice title=legacy render::$($legacy.FullName)"
           New-Item -ItemType Directory -Force cmp | Out-Null
-          & build-legacy\LegacyRender_artefacts\Release\legacy-render.exe cmp
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error title=legacy render::failed"; exit 1 }
-          $out = & build-engine\Release\hem_pg_render.exe cmp --fixes hc-engine\tools\render\known-fixes.txt 2>&1
+          & $legacy.FullName cmp *> legacy-render.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content legacy-render.txt -Tail 15 | ForEach-Object { Write-Host "::error title=legacy render::$_" }; exit 1 }
+          & build-engine\Release\hem_pg_render.exe cmp --fixes hc-engine\tools\render\known-fixes.txt *> port-compare.txt
           $rc = $LASTEXITCODE
-          $out | Set-Content port-compare.txt
+          $out = Get-Content port-compare.txt
           $out | Select-String -Pattern '^DIFFERS|^MISSING|^UNKNOWN' | Select-Object -First 40 | ForEach-Object { Write-Host "::error title=port differs::$_" }
           $out | Select-String -Pattern '^PLUGIN' | ForEach-Object { Write-Host "::notice title=plug-in::$($_.Line)" }
           $summary = ($out | Select-String -Pattern 'HEM PORT SUMMARY').Line
-          Write-Host "::notice title=port compare::$summary"
+          if ($summary) { Write-Host "::notice title=port compare::$summary" } else { $out | Select-Object -Last 15 | ForEach-Object { Write-Host "::error title=render output::$_" } }
+          exit $rc
+
+      - name: Open 0.10.0 songs with the new engine (sessions, stems, exports)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $legacy = Get-ChildItem build-legacy -Recurse -Include LegacyRender.exe, legacy-render.exe | Select-Object -First 1
+          & $legacy.FullName songs --sessions *> legacy-sessions.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content legacy-sessions.txt -Tail 15 | ForEach-Object { Write-Host "::error title=0.10.0 songs::$_" }; exit 1 }
+          Get-Content legacy-sessions.txt | ForEach-Object { Write-Host "::notice title=0.10.0 songs::$_" }
+          & build-engine\Release\hem_pg_session_check.exe songs *> session-check.txt
+          $rc = $LASTEXITCODE
+          Get-Content session-check.txt | ForEach-Object {
+            if ($_ -match '^(DIFFERS|ERROR)') { Write-Host "::warning title=songs::$_" } else { Write-Host "::notice title=songs::$_" }
+          }
           exit $rc
 
       - name: Keep the test and comparison logs
@@ -73,4 +101,8 @@ jobs:
           path: |
             engine-build.txt
             engine-tests.txt
+            legacy-render.txt
             port-compare.txt
+            legacy-sessions.txt
+            session-check.txt
+            bench.txt

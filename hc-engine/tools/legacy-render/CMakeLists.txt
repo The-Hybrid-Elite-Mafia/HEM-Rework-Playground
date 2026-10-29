@@ -15,7 +15,13 @@ else()
     FetchContent_MakeAvailable(JUCE)
 endif()
 juce_add_console_app(LegacyRender PRODUCT_NAME "legacy-render")
-target_sources(LegacyRender PRIVATE main.cpp
+target_sources(LegacyRender PRIVATE main.cpp sessions.cpp
+    ${PG_ROOT}/Source/Engine/PlaygroundEngine.cpp
+    ${PG_ROOT}/Source/Engine/MediaLoader.cpp
+    ${PG_ROOT}/Source/Engine/SincResampler.cpp
+    ${PG_ROOT}/Source/Engine/Exporter.cpp
+    ${PG_ROOT}/Source/Engine/Mp3Encoder.cpp
+    ${PG_ROOT}/Source/Session/SessionFile.cpp
     ${PG_ROOT}/Source/Plugins/ElitePlugin.cpp
     ${PG_ROOT}/Source/Plugins/EliteVox.cpp
     ${PG_ROOT}/Source/Plugins/EliteEq.cpp
@@ -39,5 +45,8 @@ target_sources(LegacyRender PRIVATE main.cpp
     ${PG_ROOT}/Source/Plugins/PluginRegistry.cpp
 )
 target_include_directories(LegacyRender PRIVATE ${PG_ROOT}/Source)
-target_compile_definitions(LegacyRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STRICT_REFCOUNTEDPOINTER=1 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_PLUGINHOST_VST3=0)
-target_link_libraries(LegacyRender PRIVATE juce::juce_audio_processors juce::juce_dsp juce::juce_gui_basics PUBLIC juce::juce_recommended_config_flags)
+target_compile_definitions(LegacyRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STRICT_REFCOUNTEDPOINTER=1 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_PLUGINHOST_VST3=0 JUCE_USE_MP3AUDIOFORMAT=1)
+target_link_libraries(LegacyRender PRIVATE juce::juce_audio_processors juce::juce_audio_formats juce::juce_dsp juce::juce_gui_basics PUBLIC juce::juce_recommended_config_flags)
+if(WIN32)
+    target_link_libraries(LegacyRender PRIVATE mf mfplat mfreadwrite mfuuid ole32)
+endif()

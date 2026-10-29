@@ -5,6 +5,7 @@
 //  produce the same fingerprints. This tool exists only to prove the port; the app never uses it.
 //
 //  Usage: legacy-render <out-dir> [--dump <scenario-substring>]  (--dump writes old-<n>.f32 for diagnosis)
+//         legacy-render <out-dir> --sessions   (mixer, sessions, media and export: see sessions.cpp)
 //    <out-dir>/signal.f32      the 6 s stereo test signal (left block, then right block, float32)
 //    <out-dir>/scenarios.txt   one block per render (see writeScenario)
 // =============================================================================
@@ -144,11 +145,14 @@ std::vector<std::pair<float, juce::String>> candidatesFor (juce::RangedAudioPara
 }
 } // namespace
 
+int runSessions (const juce::File& dir);   // sessions.cpp
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
     const juce::File outDir (argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File::getCurrentWorkingDirectory());
     outDir.createDirectory();
+    if (argc > 2 && juce::String (argv[2]) == "--sessions") return runSessions (outDir);
     if (argc > 3 && juce::String (argv[2]) == "--dump") { dumpFilter = argv[3]; dumpDir = outDir; }
     const auto in = makeSignal();
     {
