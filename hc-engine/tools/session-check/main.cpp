@@ -236,11 +236,12 @@ int main (int argc, char** argv)
             if (o.bitDepth == 16 || mp3 > 0)
             {
                 // 16-bit: try the other order of the two dither random numbers (see Exporter.hpp)
-                OfflineExport::setDitherDrawOrderForCheck (true);
+                const bool normal = OfflineExport::ditherDrawOrderSecondFirst();
+                OfflineExport::setDitherDrawOrderForCheck (! normal);
                 OfflineExport ex2 (*tree, media, o);
                 std::string err2;
                 const bool ok2 = ex2.render ({}, {}, err2);
-                OfflineExport::setDitherDrawOrderForCheck (false);
+                OfflineExport::setDitherDrawOrderForCheck (normal);
                 const auto bytes2 = ok2 ? loadFile (ex2.getTargetFile()) : std::vector<unsigned char>();
                 char hs2[32];
                 std::snprintf (hs2, sizeof hs2, "%016llx", fnvBytes (bytes2.data(), bytes2.size()));

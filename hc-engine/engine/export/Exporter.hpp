@@ -45,6 +45,7 @@ public:
     /** 16-bit dither is (random A - random B) x 1 LSB. 0.10.0's compiler picked which of the two random
         numbers is drawn first; this switch exists only so the song checker can find out which. */
     static void setDitherDrawOrderForCheck (bool secondFirst) noexcept;
+    static bool ditherDrawOrderSecondFirst() noexcept;
 
 private:
     bool renderWav (const std::filesystem::path& target, const std::function<void (double)>& progress, const std::function<bool()>& shouldCancel, std::string& error);

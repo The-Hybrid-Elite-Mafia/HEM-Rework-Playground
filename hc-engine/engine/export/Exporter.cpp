@@ -29,12 +29,20 @@ namespace
         int64 seed;
     };
 
-    std::atomic<bool> ditherSecondFirst { false };
+    // 0.10.0 wrote (rng.nextFloat() - rng.nextFloat()); C++ leaves the order of the two calls to the
+    // compiler. Measured on the Windows build (MSVC): the second-written call ran first. GCC / Clang: in order.
+#if defined(_MSC_VER)
+    constexpr bool kLegacySecondFirst = true;
+#else
+    constexpr bool kLegacySecondFirst = false;
+#endif
+    std::atomic<bool> ditherSecondFirst { kLegacySecondFirst };
 
     std::filesystem::path withExtension (std::filesystem::path p, const char* ext) { p.replace_extension (ext); return p; }
 }
 
 void OfflineExport::setDitherDrawOrderForCheck (bool secondFirst) noexcept { ditherSecondFirst.store (secondFirst); }
+bool OfflineExport::ditherDrawOrderSecondFirst() noexcept { return ditherSecondFirst.load(); }
 
 OfflineExport::OfflineExport (const Tree& session, const std::map<std::string, SampleData::Ptr>& media, ExportOptions o)
     : options (std::move (o))
