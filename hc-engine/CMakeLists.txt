@@ -15,8 +15,11 @@ else()
     add_compile_options(-Wall -Wextra -Wno-unused-parameter -ffp-contract=off -mavx2 -mfma)
 endif()
 
-add_library(hem_pg_common STATIC common/src/Param.cpp common/src/Plugin.cpp)
+add_library(hem_pg_common STATIC common/src/Param.cpp common/src/Plugin.cpp common/src/Json.cpp common/src/Files.cpp)
 target_include_directories(hem_pg_common PUBLIC common/include)
+if(WIN32)
+    target_link_libraries(hem_pg_common PUBLIC shell32 ole32)
+endif()
 
 set(HEM_PG_FX vox eq comp bass channel verb delay master swirl transient multiband width hush deess doubler console lofi tune balance)
 set(HEM_PG_FX_LIBS)
@@ -62,19 +65,40 @@ if(WIN32)
     target_link_libraries(hem_pg_engine PRIVATE mf mfplat mfreadwrite mfuuid ole32)
 endif()
 
+# Band Forge (auto-written instrumentals), the private Library, the 3D spectrum numbers, Song Forge (ACE-Step client).
+add_library(hem_pg_band STATIC band/BandTypes.cpp band/BandComposer.cpp band/BandInstruments.cpp band/BandSampler.cpp band/BandRender.cpp)
+target_include_directories(hem_pg_band PUBLIC band)
+target_link_libraries(hem_pg_band PUBLIC hem_pg_engine hem_pg_fx_master)
+
+add_library(hem_pg_library STATIC library/AudioFacts.cpp library/Library.cpp)
+target_include_directories(hem_pg_library PUBLIC library)
+target_link_libraries(hem_pg_library PUBLIC hem_pg_common hem_pg_fx_master)
+
+add_library(hem_pg_analysis STATIC analysis/Waterfall.cpp)
+target_include_directories(hem_pg_analysis PUBLIC analysis)
+target_link_libraries(hem_pg_analysis PUBLIC hem_pg_common)
+
+add_library(hem_pg_songforge STATIC songforge/AceStepClient.cpp)
+target_include_directories(hem_pg_songforge PUBLIC songforge)
+target_link_libraries(hem_pg_songforge PUBLIC hem_pg_library hem_pg_engine)
+if(WIN32)
+    target_link_libraries(hem_pg_songforge PRIVATE winhttp)
+endif()
+
 add_executable(hem_pg_render tools/render/main.cpp)
 target_link_libraries(hem_pg_render PRIVATE hem_pg_registry)
 
 add_executable(hem_pg_session_check tools/session-check/main.cpp)
-target_link_libraries(hem_pg_session_check PRIVATE hem_pg_engine hem_pg_decoders)
+target_link_libraries(hem_pg_session_check PRIVATE hem_pg_engine hem_pg_band hem_pg_library hem_pg_decoders)
 
 add_executable(hem_pg_bench tools/bench/main.cpp)
 target_link_libraries(hem_pg_bench PRIVATE hem_pg_engine)
 
 enable_testing()
-add_executable(hem_pg_tests tests/TestMain.cpp tests/PluginTests.cpp tests/EngineCoreTests.cpp tests/MixerTests.cpp)
+add_executable(hem_pg_tests tests/TestMain.cpp tests/PluginTests.cpp tests/EngineCoreTests.cpp tests/MixerTests.cpp
+    tests/BandTests.cpp tests/BandSamplerTests.cpp tests/LibraryTests.cpp tests/AnalysisSongForgeTests.cpp)
 target_include_directories(hem_pg_tests PRIVATE tests)
-target_link_libraries(hem_pg_tests PRIVATE hem_pg_engine hem_pg_registry hem_pg_presets hem_pg_decoders)
+target_link_libraries(hem_pg_tests PRIVATE hem_pg_engine hem_pg_band hem_pg_library hem_pg_analysis hem_pg_songforge hem_pg_registry hem_pg_presets hem_pg_decoders)
 add_test(NAME hem_pg_tests COMMAND hem_pg_tests)
 
 

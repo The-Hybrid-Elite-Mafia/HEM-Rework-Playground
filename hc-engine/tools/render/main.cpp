@@ -20,7 +20,7 @@ using namespace hem::pg;
 
 namespace
 {
-constexpr double kFs = 48000.0;
+double kFs = 48000.0;   // read from rate.txt when legacy-render was run with --rate
 constexpr int kBlock = 512;
 
 struct Scenario
@@ -103,6 +103,8 @@ int main (int argc, char** argv)
         }
     }
 
+    if (std::ifstream rate (dir + "/rate.txt"); rate) { double r = 0.0; if (rate >> r && r > 0.0) kFs = r; }
+    std::printf ("RATE %.0f Hz\n", kFs);
     std::ifstream sig (dir + "/signal.f32", std::ios::binary | std::ios::ate);
     if (! sig) { std::fprintf (stderr, "no signal.f32 in %s\n", dir.c_str()); return 2; }
     const auto bytes = (std::size_t) sig.tellg();

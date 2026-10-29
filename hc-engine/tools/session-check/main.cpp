@@ -7,6 +7,11 @@
 //  Usage: hem_pg_session_check <dir>        Exit code 0 = everything that must match does.
 // =============================================================================
 #include "export/Exporter.hpp"
+#include "BandComposer.hpp"
+#include "BandRender.hpp"
+#include "AudioFacts.hpp"
+#include "hem/pg/Files.hpp"
+#include <map>
 #include "media/MediaLoader.hpp"
 #include "session/SessionFile.hpp"
 
@@ -69,6 +74,42 @@ int main (int argc, char** argv)
     std::ifstream list (dir / "sessions.txt");
     if (! list) { std::printf ("ERROR no sessions.txt in %s\n", argv[1]); return 2; }
 
+    // Band Forge: the same songs rendered by the new engine, once per song name
+    struct BandJob { const char* name; band::Genre genre; int key; bool minor; double bpm; std::uint32_t seed; double sr; };
+    const BandJob bandJobs[] { { "band-bluegrass-48k", band::Genre::bluegrass, 2, false, 0.0, 7, 48000.0 },
+                               { "band-trap-44k", band::Genre::trap, 1, true, 140.0, 3, 44100.0 },
+                               { "band-gospel-48k", band::Genre::gospel, 5, false, 74.0, 11, 48000.0 } };
+    std::map<std::string, std::filesystem::path> bandFolders;
+    std::map<std::string, library::AudioFacts> bandFacts;
+    auto renderBand = [&] (const std::string& name) -> std::filesystem::path
+    {
+        if (auto it = bandFolders.find (name); it != bandFolders.end()) return it->second;
+        for (auto& bj : bandJobs)
+        {
+            if (name != bj.name) continue;
+            band::Request r;
+            r.genre = bj.genre; r.keyRoot = bj.key; r.minor = bj.minor; r.bpm = bj.bpm; r.fullSong = false; r.seed = bj.seed;
+            const auto song = band::compose (r);
+            std::vector<band::Stem> stems;
+            band::renderSong (song, bj.sr, stems);
+            const auto folder = dir / ("new-" + name);
+            std::error_code ec;
+            std::filesystem::remove_all (folder, ec);
+            std::string err, info;
+            band::writeStems (song, stems, bj.sr, folder, err);
+            band::writeMix (stems, bj.sr, band::MixFinish::clean, folder / "mix-clean.wav", info, err);
+            band::writeMix (stems, bj.sr, band::MixFinish::mastered, folder / "mix-mastered.wav", info, err);
+            AudioBuffer mix (2, stems[0].audio.getNumSamples());
+            mix.clear();
+            for (auto& st : stems) for (int c = 0; c < 2; ++c) mix.addFrom (c, 0, st.audio, c, 0, mix.getNumSamples(), 0.4f);
+            bandFacts[name] = library::measure (mix, bj.sr);
+            bandFolders[name] = folder;
+            return folder;
+        }
+        return {};
+    };
+    int bandSame = 0, bandDiff = 0;
+
     int exactExportsDiff = 0, mediaSame = 0, mediaExactDiff = 0, mediaLossy = 0, exportsSame = 0, exportsDiff = 0, errors = 0;
     MediaLoader::setTargetRate (48000.0);
     std::string line;
@@ -127,6 +168,40 @@ int main (int argc, char** argv)
                          exact ? "DIFFERS" : "LOSSY", name.c_str(), oldFrames, d->getNumFrames(), bestLag, bestLag / 48.0, toDb (peak) - toDb (maxDiff));
             if (exact) ++mediaExactDiff; else ++mediaLossy;
         }
+        else if (line[0] == 'B')
+        {
+            if (f.size() < 3) { std::printf ("ERROR band %s: 0.10.0 could not render it\n", f[0].c_str()); ++errors; continue; }
+            const auto folder = renderBand (f[0]);
+            const auto bytes = loadFile (folder / files::toPath (f[1]));
+            char hs[32];
+            std::snprintf (hs, sizeof hs, "%016llx", fnvBytes (bytes.data(), bytes.size()));
+            if (hs == f[2]) { std::printf ("SAME band %s %s (%zu bytes)\n", f[0].c_str(), f[1].c_str(), bytes.size()); ++bandSame; }
+            else
+            {
+                ++bandDiff;
+                if (f[1].ends_with (".wav"))
+                {
+                    unsigned chA = 0, chB = 0;
+                    const auto a = wavSamples (dir / ("old-" + f[0]) / files::toPath (f[1]), chA);
+                    const auto b = wavSamples (folder / files::toPath (f[1]), chB);
+                    double maxDiff = 0.0, peak = 0.0;
+                    for (size_t i = 0; i < jmin (a.size(), b.size()); ++i) { maxDiff = jmax (maxDiff, std::abs ((double) a[i] - (double) b[i])); peak = jmax (peak, std::abs ((double) a[i])); }
+                    std::printf ("DIFFERS band %s %s: %zu vs %zu samples, largest difference %.1f dB below the peak\n", f[0].c_str(), f[1].c_str(), a.size(), b.size(), toDb (peak) - toDb (maxDiff));
+                }
+                else std::printf ("DIFFERS band %s %s: %zu bytes\n", f[0].c_str(), f[1].c_str(), bytes.size());
+            }
+        }
+        else if (line[0] == 'F')
+        {
+            if (f.size() < 8) continue;
+            renderBand (f[0]);
+            const auto& nf = bandFacts[f[0]];
+            const bool same = std::abs (nf.bpm - std::stod (f[1])) < 1.0e-9 && nf.keyRoot == std::stoi (f[3]) && (nf.minor ? 1 : 0) == std::stoi (f[4])
+                              && std::abs (nf.lufs - std::stof (f[6])) < 1.0e-4f && std::abs (nf.peakDb - std::stof (f[7])) < 1.0e-4f;
+            std::printf ("%s library facts %s: 0.10.0 %.3f BPM key %s/%s %.2f LUFS, new %.3f BPM key %d/%d %.2f LUFS\n", same ? "SAME" : "DIFFERS", f[0].c_str(),
+                         std::stod (f[1]), f[3].c_str(), f[4].c_str(), std::stod (f[6]), nf.bpm, nf.keyRoot, nf.minor ? 1 : 0, (double) nf.lufs);
+            if (same) ++bandSame; else ++bandDiff;
+        }
         else if (line[0] == 'E')
         {
             if (f.size() < 9) { std::printf ("EXPORT %s %s: 0.10.0 could not export it (%s)\n", f[0].c_str(), f[1].c_str(), f.size() > 2 ? f[2].c_str() : ""); continue; }
@@ -158,6 +233,19 @@ int main (int argc, char** argv)
                 ++exportsSame;
                 continue;
             }
+            if (o.bitDepth == 16 || mp3 > 0)
+            {
+                // 16-bit: try the other order of the two dither random numbers (see Exporter.hpp)
+                OfflineExport::setDitherDrawOrderForCheck (true);
+                OfflineExport ex2 (*tree, media, o);
+                std::string err2;
+                const bool ok2 = ex2.render ({}, {}, err2);
+                OfflineExport::setDitherDrawOrderForCheck (false);
+                const auto bytes2 = ok2 ? loadFile (ex2.getTargetFile()) : std::vector<unsigned char>();
+                char hs2[32];
+                std::snprintf (hs2, sizeof hs2, "%016llx", fnvBytes (bytes2.data(), bytes2.size()));
+                std::printf ("%s export %s %s with the dither numbers drawn the other way round\n", hs2 == f[7] ? "SAME" : "STILL DIFFERS", session.c_str(), label.c_str());
+            }
             ++exportsDiff;
             if (session == "song-exact") ++exactExportsDiff;   // only WAV / AIFF / FLAC stems: must be byte for byte
             if (mp3 > 0) { std::printf ("DIFFERS export %s %s: %zu bytes vs %s\n", session.c_str(), label.c_str(), bytes.size(), f[8].c_str()); continue; }
@@ -178,7 +266,7 @@ int main (int argc, char** argv)
                          toDb (peak) - toDb (maxDiff));
         }
     }
-    std::printf ("HEM SESSION SUMMARY: media identical %d, exact-format media different %d, lossy media measured %d, exports identical %d, exports different %d, errors %d\n",
-                 mediaSame, mediaExactDiff, mediaLossy, exportsSame, exportsDiff, errors);
-    return (mediaExactDiff == 0 && exactExportsDiff == 0 && errors == 0) ? 0 : 1;
+    std::printf ("HEM SESSION SUMMARY: media identical %d, exact-format media different %d, lossy media measured %d, exports identical %d, exports different %d, Band Forge files identical %d, different %d, errors %d\n",
+                 mediaSame, mediaExactDiff, mediaLossy, exportsSame, exportsDiff, bandSame, bandDiff, errors);
+    return (mediaExactDiff == 0 && exactExportsDiff == 0 && bandDiff == 0 && errors == 0) ? 0 : 1;
 }

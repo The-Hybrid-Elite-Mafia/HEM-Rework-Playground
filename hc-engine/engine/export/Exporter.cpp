@@ -2,6 +2,7 @@
 #include "Mp3Encoder.hpp"
 #include "WavFile.hpp"
 
+#include <atomic>
 #include <cmath>
 #include <limits>
 
@@ -28,8 +29,12 @@ namespace
         int64 seed;
     };
 
+    std::atomic<bool> ditherSecondFirst { false };
+
     std::filesystem::path withExtension (std::filesystem::path p, const char* ext) { p.replace_extension (ext); return p; }
 }
+
+void OfflineExport::setDitherDrawOrderForCheck (bool secondFirst) noexcept { ditherSecondFirst.store (secondFirst); }
 
 OfflineExport::OfflineExport (const Tree& session, const std::map<std::string, SampleData::Ptr>& media, ExportOptions o)
     : options (std::move (o))
@@ -107,8 +112,16 @@ bool OfflineExport::renderWav (const std::filesystem::path& target, const std::f
     auto write = [&] (float* l, float* r, int count)
     {
         if (options.bitDepth == 16)
+        {
+            const bool swap = ditherSecondFirst.load();
             for (float* d : { l, r })
-                for (int i = 0; i < count; ++i) d[i] += (rng.nextFloat() - rng.nextFloat()) * lsb;
+                for (int i = 0; i < count; ++i)
+                {
+                    const float first = rng.nextFloat();
+                    const float second = rng.nextFloat();
+                    d[i] += (swap ? second - first : first - second) * lsb;
+                }
+        }
         const float* chans[2] { l, r };
         return writer.write (chans, count);
     };

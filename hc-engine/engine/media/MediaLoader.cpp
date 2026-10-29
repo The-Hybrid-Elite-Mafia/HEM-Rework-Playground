@@ -197,6 +197,16 @@ bool MediaLoader::isAudioFile (const std::filesystem::path& f)
 
 SampleData::Ptr MediaLoader::decode (const std::filesystem::path& file, std::string& error)
 {
+    return decodeAt (file, targetRate.load(), error);
+}
+
+SampleData::Ptr MediaLoader::decodeNative (const std::filesystem::path& file, std::string& error)
+{
+    return decodeAt (file, 0.0, error);
+}
+
+SampleData::Ptr MediaLoader::decodeAt (const std::filesystem::path& file, double want, std::string& error)
+{
     std::error_code ec;
     if (! std::filesystem::is_regular_file (file, ec))
     {
@@ -260,7 +270,6 @@ SampleData::Ptr MediaLoader::decode (const std::filesystem::path& file, std::str
     catch (const std::bad_alloc&) { error = "Not enough memory for " + displayName (file); return nullptr; }
     d.interleaved = {};
 
-    const double want = targetRate.load();
     const auto inRate = (std::uint32_t) std::llround (d.rate);
     const auto outRate = (std::uint32_t) std::llround (want);
     if (want >= 8000.0 && inRate != outRate && std::abs (d.rate - (double) inRate) < 1.0e-6)

@@ -39,6 +39,10 @@ inline int roundToInt (float v) noexcept { return (int) std::nearbyint ((double)
 
 template <typename T> struct MathConstants { static constexpr T pi = std::numbers::pi_v<T>; static constexpr T twoPi = 2 * std::numbers::pi_v<T>; static constexpr T halfPi = std::numbers::pi_v<T> / 2; };
 
+/** 0 <= v < end. */
+template <typename T1, typename T2>
+constexpr bool isPositiveAndBelow (T1 v, T2 end) noexcept { return v >= T1 (0) && v < (T1) end; }
+
 /** True when a and b are equal within one float step (relative) — the rule the old code's
     parameter and smoothing logic used to decide "nothing changed". */
 template <typename T>

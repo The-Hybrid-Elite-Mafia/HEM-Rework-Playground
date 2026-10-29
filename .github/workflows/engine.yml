@@ -38,59 +38,64 @@ jobs:
       - name: Run the engine tests
         shell: pwsh
         run: |
-          $out = & build-engine\Release\hem_pg_tests.exe 2>&1
+          $ErrorActionPreference = 'Continue'
+          function Report($level, $title, $lines) { $m = (($lines | ForEach-Object { "$_" }) -join "`n").Replace('%','%25').Replace("`r",'').Replace("`n",'%0A'); if ($m) { Write-Host "::$level title=$title::$m" } }
+          & build-engine\Release\hem_pg_tests.exe *> engine-tests.txt
           $rc = $LASTEXITCODE
-          $out | Set-Content engine-tests.txt
-          $out | Select-String -Pattern '^!!!|\[FAIL\]' | ForEach-Object { Write-Host "::error title=engine test::$_" }
-          $summary = ($out | Select-String -Pattern 'HEM ENGINE TEST SUMMARY').Line
-          Write-Host "::notice title=engine tests::$summary"
+          $out = Get-Content engine-tests.txt
+          Report error "engine test failures" ($out | Select-String -Pattern '^!!!|\[FAIL\]' | Select-Object -First 60)
+          Report notice "engine tests" ($out | Select-String -Pattern 'HEM ENGINE TEST SUMMARY')
           exit $rc
 
       - name: Measure CPU time per block (this cloud machine, not Steven's PC)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          Get-CimInstance Win32_Processor | ForEach-Object { Write-Host "::notice title=cpu::$($_.Name), $($_.NumberOfCores) cores" }
+          function Report($level, $title, $lines) { $m = (($lines | ForEach-Object { "$_" }) -join "`n").Replace('%','%25').Replace("`r",'').Replace("`n",'%0A'); if ($m) { Write-Host "::$level title=$title::$m" } }
           & build-engine\Release\hem_pg_bench.exe *> bench.txt
-          Get-Content bench.txt | ForEach-Object { Write-Host "::notice title=cpu::$_" }
+          $cpu = Get-CimInstance Win32_Processor | ForEach-Object { "$($_.Name.Trim()), $($_.NumberOfCores) cores" }
+          Report notice "cpu" (@($cpu) + (Get-Content bench.txt))
 
       - name: Build the 0.10.0 plug-ins as a renderer (JUCE 8.0.15, only for the comparison)
         run: |
           cmake -S hc-engine/tools/legacy-render -B build-legacy -G "Visual Studio 17 2022" -A x64
           cmake --build build-legacy --config Release --parallel
 
-      - name: Compare every render, 0.10.0 vs the new engines
+      - name: Compare every render, 0.10.0 vs the new engines (48, 44.1 and 96 kHz)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
+          function Report($level, $title, $lines) { $m = (($lines | ForEach-Object { "$_" }) -join "`n").Replace('%','%25').Replace("`r",'').Replace("`n",'%0A'); if ($m) { Write-Host "::$level title=$title::$m" } }
           $legacy = Get-ChildItem build-legacy -Recurse -Include LegacyRender.exe, legacy-render.exe | Select-Object -First 1
-          if (-not $legacy) { Write-Host "::error title=legacy render::the 0.10.0 renderer was not built"; exit 1 }
-          Write-Host "::notice title=legacy render::$($legacy.FullName)"
-          New-Item -ItemType Directory -Force cmp | Out-Null
-          & $legacy.FullName cmp *> legacy-render.txt
-          if ($LASTEXITCODE -ne 0) { Get-Content legacy-render.txt -Tail 15 | ForEach-Object { Write-Host "::error title=legacy render::$_" }; exit 1 }
-          & build-engine\Release\hem_pg_render.exe cmp --fixes hc-engine\tools\render\known-fixes.txt *> port-compare.txt
-          $rc = $LASTEXITCODE
-          $out = Get-Content port-compare.txt
-          $out | Select-String -Pattern '^DIFFERS|^MISSING|^UNKNOWN' | Select-Object -First 40 | ForEach-Object { Write-Host "::error title=port differs::$_" }
-          $out | Select-String -Pattern '^PLUGIN' | ForEach-Object { Write-Host "::notice title=plug-in::$($_.Line)" }
-          $summary = ($out | Select-String -Pattern 'HEM PORT SUMMARY').Line
-          if ($summary) { Write-Host "::notice title=port compare::$summary" } else { $out | Select-Object -Last 15 | ForEach-Object { Write-Host "::error title=render output::$_" } }
-          exit $rc
+          if (-not $legacy) { Report error "legacy render" "the 0.10.0 renderer was not built"; exit 1 }
+          $fail = 0
+          foreach ($rate in 48000, 44100, 96000) {
+            $d = "cmp$rate"
+            New-Item -ItemType Directory -Force $d | Out-Null
+            & $legacy.FullName $d --rate $rate *> "legacy-render-$rate.txt"
+            if ($LASTEXITCODE -ne 0) { Report error "legacy render $rate" (Get-Content "legacy-render-$rate.txt" -Tail 15); $fail = 1; continue }
+            & build-engine\Release\hem_pg_render.exe $d --fixes hc-engine\tools\render\known-fixes.txt *> "port-compare-$rate.txt"
+            if ($LASTEXITCODE -ne 0) { $fail = 1 }
+            $out = Get-Content "port-compare-$rate.txt"
+            $summary = $out | Select-String -Pattern 'HEM PORT SUMMARY'
+            Report notice "port compare $rate Hz" (@($summary) + ($out | Select-String -Pattern '^PLUGIN'))
+            Report error "port differs $rate Hz" ($out | Select-String -Pattern '^DIFFERS|^MISSING|^UNKNOWN' | Select-Object -First 60)
+            if (-not $summary) { Report error "render output $rate Hz" ($out | Select-Object -Last 15) }
+          }
+          exit $fail
 
-      - name: Open 0.10.0 songs with the new engine (sessions, stems, exports)
+      - name: Open 0.10.0 songs with the new engine (sessions, stems, exports, Band Forge)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
+          function Report($level, $title, $lines) { $m = (($lines | ForEach-Object { "$_" }) -join "`n").Replace('%','%25').Replace("`r",'').Replace("`n",'%0A'); if ($m) { Write-Host "::$level title=$title::$m" } }
           $legacy = Get-ChildItem build-legacy -Recurse -Include LegacyRender.exe, legacy-render.exe | Select-Object -First 1
           & $legacy.FullName songs --sessions *> legacy-sessions.txt
-          if ($LASTEXITCODE -ne 0) { Get-Content legacy-sessions.txt -Tail 15 | ForEach-Object { Write-Host "::error title=0.10.0 songs::$_" }; exit 1 }
-          Get-Content legacy-sessions.txt | ForEach-Object { Write-Host "::notice title=0.10.0 songs::$_" }
+          if ($LASTEXITCODE -ne 0) { Report error "0.10.0 songs" (Get-Content legacy-sessions.txt -Tail 15); exit 1 }
           & build-engine\Release\hem_pg_session_check.exe songs *> session-check.txt
           $rc = $LASTEXITCODE
-          Get-Content session-check.txt | ForEach-Object {
-            if ($_ -match '^(DIFFERS|ERROR)') { Write-Host "::warning title=songs::$_" } else { Write-Host "::notice title=songs::$_" }
-          }
+          $out = Get-Content session-check.txt
+          Report notice "songs" ((Get-Content legacy-sessions.txt) + $out)
           exit $rc
 
       - name: Keep the test and comparison logs
@@ -101,8 +106,8 @@ jobs:
           path: |
             engine-build.txt
             engine-tests.txt
-            legacy-render.txt
-            port-compare.txt
+            legacy-render-*.txt
+            port-compare-*.txt
             legacy-sessions.txt
             session-check.txt
             bench.txt

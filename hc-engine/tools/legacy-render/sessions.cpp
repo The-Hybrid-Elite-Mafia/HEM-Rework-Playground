@@ -11,6 +11,9 @@
 #include "Engine/MediaLoader.h"
 #include "Engine/Mp3Encoder.h"
 #include "Session/SessionFile.h"
+#include "Band/BandComposer.h"
+#include "Band/BandRender.h"
+#include "Library/AudioFacts.h"
 #include <cstdio>
 #include <cstring>
 
@@ -222,6 +225,39 @@ int runSessions (const juce::File& dir)
         std::fprintf (f, "E %s|%s|%d|%.17g|%d|%d|%d|%016llx|%lld\n", j.session.toRawUTF8(), j.label.toRawUTF8(), j.bits, j.rate,
                       j.clean ? 1 : 0, j.before ? 1 : 0, j.mp3, fnvFile (ex.getTargetFile()), (long long) ex.getTargetFile().getSize());
     }
+    //------------------------------------------------------------------ Band Forge: stems, MIDI, clean and mastered mixes
+    struct BandJob { const char* name; band::Genre genre; int key; bool minor; double bpm; uint32_t seed; double sr; };
+    const BandJob bandJobs[] { { "band-bluegrass-48k", band::Genre::bluegrass, 2, false, 0.0, 7, 48000.0 },
+                               { "band-trap-44k", band::Genre::trap, 1, true, 140.0, 3, 44100.0 },
+                               { "band-gospel-48k", band::Genre::gospel, 5, false, 74.0, 11, 48000.0 } };
+    for (auto& bj : bandJobs)
+    {
+        band::Request r;
+        r.genre = bj.genre; r.keyRoot = bj.key; r.minor = bj.minor; r.bpm = bj.bpm; r.fullSong = false; r.seed = bj.seed;
+        const auto song = band::compose (r);
+        std::vector<band::Stem> stems;
+        if (! band::renderSong (song, bj.sr, stems)) { std::fprintf (f, "B %s|ERROR render\n", bj.name); continue; }
+        const auto folder = dir.getChildFile (juce::String ("old-") + bj.name);
+        folder.deleteRecursively();
+        juce::String err, info;
+        const auto files = band::writeStems (song, stems, bj.sr, folder, err);
+        for (auto& file : files) std::fprintf (f, "B %s|%s|%016llx\n", bj.name, file.getFileName().toRawUTF8(), fnvFile (file));
+        std::fprintf (f, "B %s|Band Forge.mid|%016llx\n", bj.name, fnvFile (folder.getChildFile ("Band Forge.mid")));
+        if (band::writeMix (stems, bj.sr, band::MixFinish::clean, folder.getChildFile ("mix-clean.wav"), info, err))
+            std::fprintf (f, "B %s|mix-clean.wav|%016llx|%s\n", bj.name, fnvFile (folder.getChildFile ("mix-clean.wav")), info.toRawUTF8());
+        if (band::writeMix (stems, bj.sr, band::MixFinish::mastered, folder.getChildFile ("mix-mastered.wav"), info, err))
+            std::fprintf (f, "B %s|mix-mastered.wav|%016llx|%s\n", bj.name, fnvFile (folder.getChildFile ("mix-mastered.wav")), info.toRawUTF8());
+        // the LIBRARY's measurement of the clean mix
+        {
+            juce::AudioBuffer<float> mix (2, stems[0].audio.getNumSamples());
+            mix.clear();
+            for (auto& s : stems) for (int c = 0; c < 2; ++c) mix.addFrom (c, 0, s.audio, c, 0, mix.getNumSamples(), 0.4f);
+            const auto facts = library::measure (mix, bj.sr);
+            std::fprintf (f, "F %s|%.17g|%.9g|%d|%d|%.9g|%.9g|%.9g\n", bj.name, facts.bpm, (double) facts.tempoConfidence, facts.keyRoot, facts.minor ? 1 : 0,
+                          (double) facts.keyConfidence, (double) facts.lufs, (double) facts.peakDb);
+        }
+    }
+
     std::fclose (f);
     std::printf ("legacy-render --sessions: %d media, %d exports\n", (int) (exact.size() + lossy.size()), (int) jobs.size());
     return 0;

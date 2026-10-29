@@ -22,6 +22,12 @@ target_sources(LegacyRender PRIVATE main.cpp sessions.cpp
     ${PG_ROOT}/Source/Engine/Exporter.cpp
     ${PG_ROOT}/Source/Engine/Mp3Encoder.cpp
     ${PG_ROOT}/Source/Session/SessionFile.cpp
+    ${PG_ROOT}/Source/Band/BandTypes.cpp
+    ${PG_ROOT}/Source/Band/BandComposer.cpp
+    ${PG_ROOT}/Source/Band/BandInstruments.cpp
+    ${PG_ROOT}/Source/Band/BandSampler.cpp
+    ${PG_ROOT}/Source/Band/BandRender.cpp
+    ${PG_ROOT}/Source/Library/AudioFacts.cpp
     ${PG_ROOT}/Source/Plugins/ElitePlugin.cpp
     ${PG_ROOT}/Source/Plugins/EliteVox.cpp
     ${PG_ROOT}/Source/Plugins/EliteEq.cpp

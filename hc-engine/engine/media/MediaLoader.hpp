@@ -30,6 +30,9 @@ struct MediaLoader
     /** Decodes one file. Null + a plain-words reason in `error` if it cannot. */
     static SampleData::Ptr decode (const std::filesystem::path&, std::string& error);
 
+    /** Decodes one file at its own rate (no conversion), e.g. for instrument samples. */
+    static SampleData::Ptr decodeNative (const std::filesystem::path&, std::string& error);
+
     /** File-chooser pattern: "*.wav;*.bwf;*.aiff;*.aif;*.flac;*.ogg;*.mp3" */
     static std::string wildcard();
     static bool isAudioFile (const std::filesystem::path&);
@@ -38,5 +41,8 @@ struct MediaLoader
         paths exactly as given (sessions store them as text). */
     static std::map<std::string, SampleData::Ptr> decodeAll (const std::vector<std::string>& paths, std::vector<std::string>& failed,
                                                              const std::function<bool()>& shouldCancel = {});
+
+private:
+    static SampleData::Ptr decodeAt (const std::filesystem::path&, double rate, std::string& error);
 };
 } // namespace hem::pg
