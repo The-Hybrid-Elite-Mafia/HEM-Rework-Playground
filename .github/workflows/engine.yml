@@ -23,7 +23,16 @@ jobs:
         run: cmake -S hc-engine -B build-engine -G "Visual Studio 17 2022" -A x64
 
       - name: Build the engine, tests and the render checker
-        run: cmake --build build-engine --config Release --parallel
+        shell: pwsh
+        run: |
+          $out = cmake --build build-engine --config Release --parallel 2>&1
+          $rc = $LASTEXITCODE
+          $out | Set-Content engine-build.txt
+          $out | Select-String -Pattern ': (fatal )?error ' | Select-Object -First 40 | ForEach-Object { Write-Host "::error title=compile::$($_.Line.Trim())" }
+          $w = ($out | Select-String -Pattern ': warning C').Count
+          Write-Host "::notice title=build::$w compiler warnings"
+          $out | Select-String -Pattern ': warning C' | Select-Object -First 25 | ForEach-Object { Write-Host "::warning title=compile::$($_.Line.Trim())" }
+          exit $rc
 
       - name: Run the engine tests
         shell: pwsh
@@ -62,5 +71,6 @@ jobs:
         with:
           name: engine-logs
           path: |
+            engine-build.txt
             engine-tests.txt
             port-compare.txt
