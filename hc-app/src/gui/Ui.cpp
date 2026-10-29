@@ -186,6 +186,7 @@ std::vector<std::filesystem::path> Ui::takeDrop (Rect r) noexcept
 //==============================================================================
 bool Ui::button (Id id, Rect r, std::string_view text, ButtonLook look, Rgba accent, bool en, bool lit, float textHeight)
 {
+    if (look == ButtonLook::chrome) return capButton (id, r, text, lit, accent, en);
     const auto pr = behave (id, r, en);
     const bool down = pr.held && r.contains (in.x, in.y);
     const float th = textHeight > 0.0f ? textHeight : std::min (17.0f, r.h * 0.42f);
@@ -231,7 +232,7 @@ bool Ui::button (Id id, Rect r, std::string_view text, ButtonLook look, Rgba acc
             break;
         }
         case ButtonLook::chrome:
-            return capButton (id, r, text, lit, accent, en) || pr.clicked;
+            break;
         case ButtonLook::flat:
             if (pr.hover) p.fillRound (r, 4.0f, alpha (colours::white, 0.08f));
             p.text (text, reduced (r, 4, 0), th, true, alpha (lit ? accent : colours::paper, fade), HAlign::centre);

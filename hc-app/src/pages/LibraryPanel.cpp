@@ -5,7 +5,9 @@
 #include "hem/pg/Files.hpp"
 #include "media/MediaLoader.hpp"
 
+#include <cctype>
 #include <cmath>
+#include <iterator>
 #include <cstdio>
 #include <ctime>
 

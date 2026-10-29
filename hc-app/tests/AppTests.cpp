@@ -147,7 +147,7 @@ namespace
         const Rect c = centred ({ 0, 0, 100, 100 }, 20, 10);
         expect (c.x == 40 && c.y == 45, "centred");
         const auto d = toDesign ({ 1, 2, 3, 4 });
-        expect (d.x == 2.4f && d.w == 7.2f && fromDesign (d).h == 4.0f, "L <-> design units");
+        expect (std::abs (d.x - 2.4f) < 1.0e-5f && std::abs (d.w - 7.2f) < 1.0e-5f && std::abs (fromDesign (d).h - 4.0f) < 1.0e-5f, "L <-> design units");
         expect (styleFor (9.5f, false) == hc::ui::TextStyle::Micro && styleFor (13.0f, true) == hc::ui::TextStyle::SmallBold
                     && styleFor (38.0f, true) == hc::ui::TextStyle::Heading, "0.10.0 font heights land on the baked styles");
         const auto c1 = brighter (argb (0xff2f8bff), 0.5f);

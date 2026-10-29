@@ -133,9 +133,10 @@ PanelMap panelFor (const pg::Plugin& plugin)
     else if (id == "elite-channel")
     {
         b.group ("GATE", { { "gate_on", "GATE" }, { "gate_thr", "GATE THR" }, { "gate_floor", "FLOOR" }, { "gate_rel", "GATE REL" } });
-        b.group ("EQ", { { "eq_on", "EQ" }, { "eq1_freq", "LOW HZ" }, { "eq1_gain", "LOW" }, { "eq2_freq", "LO-MID HZ" }, { "eq2_gain", "LO-MID" },
-                         { "eq2_q", "LO-MID Q" }, { "eq3_freq", "HI-MID HZ" }, { "eq3_gain", "HI-MID" }, { "eq3_q", "HI-MID Q" },
-                         { "eq4_freq", "HIGH HZ" }, { "eq4_gain", "HIGH" } });
+        // LOW Q and HIGH Q were controls 0.10.0's window never showed; every control is on the plate now
+        b.group ("EQ", { { "eq_on", "EQ" }, { "eq1_freq", "LOW HZ" }, { "eq1_gain", "LOW" }, { "eq1_q", "LOW Q" }, { "eq2_freq", "LO-MID HZ" },
+                         { "eq2_gain", "LO-MID" }, { "eq2_q", "LO-MID Q" }, { "eq3_freq", "HI-MID HZ" }, { "eq3_gain", "HI-MID" }, { "eq3_q", "HI-MID Q" },
+                         { "eq4_freq", "HIGH HZ" }, { "eq4_gain", "HIGH" }, { "eq4_q", "HIGH Q" } });
         b.group ("COMP", { { "comp_on", "COMP" }, { "comp_mode", "COMP MODE" }, { "comp_thr", "COMP THR" }, { "comp_ratio", "RATIO" },
                            { "comp_atk", "ATTACK" }, { "comp_rel", "RELEASE" } });
         b.group ("OUTPUT", { { "order", "ORDER" }, { "phase", "PHASE INVERT" }, { "output", "OUTPUT" } });
