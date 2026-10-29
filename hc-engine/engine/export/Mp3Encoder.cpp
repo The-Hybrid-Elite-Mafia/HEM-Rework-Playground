@@ -3,6 +3,7 @@
 #include "dr_wav.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -20,6 +21,26 @@
 
 namespace hem::pg
 {
+namespace
+{
+    std::atomic<bool> legacySamples { false };
+}
+
+void Mp3Encoder::setLegacySamplesForCheck (bool on) noexcept { legacySamples.store (on); }
+bool Mp3Encoder::legacySamplesForCheck() noexcept { return legacySamples.load(); }
+
+void Mp3Encoder::toEncoderSamples (const std::int16_t* in, int frames, int fileChannels, int channels, std::int16_t* out, bool legacy) noexcept
+{
+    for (int i = 0; i < frames; ++i)
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            const std::int16_t x = in[(std::size_t) i * (std::size_t) fileChannels + (std::size_t) ch];
+            if (! legacy) { out[i * channels + ch] = x; continue; }
+            const float f = (float) x * (float) (1.0 / 32768.0);
+            out[i * channels + ch] = (std::int16_t) (int) std::nearbyint ((double) (std::clamp (f, -1.0f, 1.0f) * 32767.0f));
+        }
+}
+
 #if defined(_WIN32)
 namespace
 {
@@ -148,14 +169,7 @@ bool Mp3Encoder::encode (const std::filesystem::path& wavIn, const std::filesyst
         if (FAILED (h = MFCreateMemoryBuffer (bytes, mb.put()))) { error = hr ("MP3 buffer", h); return false; }
         BYTE* data = nullptr;
         mb->Lock (&data, nullptr, nullptr);
-        auto* out = reinterpret_cast<std::int16_t*> (data);
-        // Same steps as 0.10.0: the 16-bit sample read back as a float (x / 32768), then x 32767 and rounded.
-        for (int i = 0; i < n; ++i)
-            for (int ch = 0; ch < (int) channels; ++ch)
-            {
-                const float f = (float) in[(size_t) i * fileChannels + (size_t) ch] * (float) (1.0 / 32768.0);
-                out[i * (int) channels + ch] = (std::int16_t) (int) std::nearbyint ((double) (std::clamp (f, -1.0f, 1.0f) * 32767.0f));
-            }
+        toEncoderSamples (in.data(), n, (int) fileChannels, (int) channels, reinterpret_cast<std::int16_t*> (data), legacySamplesForCheck());
         mb->Unlock();
         mb->SetCurrentLength (bytes);
 

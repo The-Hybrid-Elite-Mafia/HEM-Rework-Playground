@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Check out the repository and The Hybrid Core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -81,8 +81,15 @@ jobs:
           if (-not (Test-Path build-app\hc-engine\Release\hem_pg_bench.exe)) { Write-Host '::error::hem_pg_bench.exe was not built'; exit 1 }
           & build-app\hc-engine\Release\hem_pg_bench.exe *> bench.txt
           $cpu = Get-CimInstance Win32_Processor | ForEach-Object { "$($_.Name.Trim()), $($_.NumberOfCores) cores" }
-          $m = ((@($cpu) + (Get-Content bench.txt)) -join "`n").Replace('%','%25').Replace("`n",'%0A')
-          Write-Host "::notice title=cpu::$m"
+          $lines = Get-Content bench.txt
+          # one note per sample rate (a single note is cut off after about 4 KB)
+          foreach ($rate in @('48 kHz', '96 kHz')) {
+            $part = @($cpu) + @($lines | Where-Object { $_ -like "*@ $rate*" })
+            $m = ($part -join "`n").Replace('%','%25').Replace("`n",'%0A')
+            Write-Host "::notice title=cpu $rate::$m"
+          }
+          $rest = @($lines | Where-Object { $_ -notlike '*@ 48 kHz*' -and $_ -notlike '*@ 96 kHz*' })
+          if ($rest.Count -gt 0) { Write-Host "::notice title=cpu other::$(($rest -join "`n").Replace('%','%25').Replace("`n",'%0A'))" }
 
       - name: Software OpenGL for the screenshots (Mesa llvmpipe, CI only, never shipped)
         shell: pwsh
@@ -192,7 +199,7 @@ jobs:
           Write-Host "::notice title=installer::$($f.Name) $([math]::Round($f.Length / 1mb, 1)) MB"
 
       - name: Upload the installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ReworkPlayground-0.11-Windows-Installer
           path: Installer/Output/*.exe
@@ -222,7 +229,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build the engine tests with /fsanitize=address
         shell: pwsh

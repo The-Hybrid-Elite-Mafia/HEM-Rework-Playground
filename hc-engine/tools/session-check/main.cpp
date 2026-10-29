@@ -7,6 +7,7 @@
 //  Usage: hem_pg_session_check <dir>        Exit code 0 = everything that must match does.
 // =============================================================================
 #include "export/Exporter.hpp"
+#include "export/Mp3Encoder.hpp"
 #include "BandComposer.hpp"
 #include "BandRender.hpp"
 #include "AudioFacts.hpp"
@@ -222,6 +223,9 @@ int main (int argc, char** argv)
             o.beforeMode = f[5] == "1";
             o.mp3Kbps = mp3;
             o.tailSeconds = 2.0;
+            // MP3: 0.11.1 hands the encoder the exact 16-bit samples (0.10.0 shrank them by 0.0003 dB). To prove the
+            // rest of the export is unchanged, the comparison encodes the old way; the new way is checked by the unit tests.
+            Mp3Encoder::setLegacySamplesForCheck (mp3 > 0);
             OfflineExport ex (*tree, media, o);
             if (! ex.render ({}, {}, err)) { std::printf ("ERROR export %s %s: %s\n", session.c_str(), label.c_str(), err.c_str()); ++errors; continue; }
             const auto bytes = loadFile (ex.getTargetFile());

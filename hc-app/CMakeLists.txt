@@ -20,7 +20,7 @@ endif()
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Playground configurations" FORCE)
 
 project(HEMReworkPlayground
-    VERSION 0.11.0
+    VERSION 0.11.1
     DESCRIPTION "HEM Rework Playground"
     LANGUAGES C CXX RC)
 

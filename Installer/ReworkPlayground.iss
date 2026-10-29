@@ -1,6 +1,6 @@
 ; HEM Rework Playground - Inno Setup 6 script
 ;
-; Build:  iscc /DBuildDir="<build-app\Release>" /DAppVersion=0.11.0 [/DAsioLicense=<SDK licence file>] Installer\ReworkPlayground.iss
+; Build:  iscc /DBuildDir="<build-app\Release>" /DAppVersion=0.11.1 [/DAsioLicense=<SDK licence file>] Installer\ReworkPlayground.iss
 ;
 ; 0.11 is built on The Hybrid Core (no JUCE): the program, its assets folder (faceplate, Poppins, logo)
 ; and the licences. Same AppId, folder and file type as 0.10, so it installs over it in place.
@@ -22,7 +22,7 @@
 ;     Tools/build_sound_pack.py) into {app}\Sounds\HEM Sound Pack, replaced on every upgrade.
 
 #ifndef AppVersion
-  #define AppVersion "0.11.0"
+  #define AppVersion "0.11.1"
 #endif
 #ifndef BuildDir
   #define BuildDir "..\build-app\Release"

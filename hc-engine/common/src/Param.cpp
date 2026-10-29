@@ -10,6 +10,14 @@ namespace
     {
         char buf[48];
         std::snprintf (buf, sizeof buf, "%.*f", decimals, (double) v);
+        // a value that rounds to zero is shown without a sign ("0.0 dB", not "-0.0 dB")
+        if (buf[0] == '-')
+        {
+            bool zero = true;
+            for (const char* c = buf; *c != '\0'; ++c)
+                if (*c >= '1' && *c <= '9') { zero = false; break; }
+            if (zero) return std::string (buf + 1);
+        }
         return buf;
     }
 }

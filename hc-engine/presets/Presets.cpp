@@ -48,8 +48,8 @@ void Presets::apply (Plugin& plugin, const FactoryPreset& preset)
     for (auto& p : plugin.parameters().all())
     {
         if (p->id() == "bypass") continue;
-        const auto it = std::find_if (base.begin(), base.end(), [&] (auto& kv) { return kv.first == p->id(); });
-        if (it != base.end()) p->setValue (it->second);
+        const auto it = std::find_if (base.begin(), base.end(), [&] (auto& kv) { return kv.id == p->id(); });
+        if (it != base.end()) p->setValue (it->value);
         else p->resetToDefault();
     }
     for (const auto& [id, value] : preset.values)

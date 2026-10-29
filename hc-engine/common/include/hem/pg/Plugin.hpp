@@ -31,11 +31,20 @@ struct PluginInfo
     bool masterOnly = false; // only allowed in MASTER slots
 };
 
+/** One control's real (not 0..1) value, by id. A plain constructor (not std::pair) so whole-number
+    literals such as { "mode", 1 } become floats where they are written, without a conversion warning. */
+struct ParamValue
+{
+    std::string id;
+    float value = 0.0f;
+    ParamValue (std::string i, float v) : id (std::move (i)), value (v) {}
+};
+
 /** A plug-in's saved settings: every control's real value, by id. */
 struct PluginState
 {
     std::string pluginId;
-    std::vector<std::pair<std::string, float>> values;
+    std::vector<ParamValue> values;
 };
 
 class Plugin

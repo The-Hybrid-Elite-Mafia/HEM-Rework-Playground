@@ -708,6 +708,7 @@ void PlaygroundEngine::setTrackMedia (int t, SampleData::Ptr media)
     auto& tk = tracks[(size_t) t];
     auto old = tk.mediaOwned;
     tk.mediaOwned = media;
+    tk.missingFile.clear();
     tk.media.store (media.get(), std::memory_order_release);
     retire (nullptr, std::move (old));
     updateSongLength();
@@ -774,7 +775,7 @@ Tree PlaygroundEngine::createSessionTree() const
         tt.set ("index", t);
         tt.set ("name", tk.name);
         tt.set ("colour", colourText (tk.colour));
-        std::string file;
+        std::string file = tk.missingFile;   // a file that was not found stays in the session for next time
         if (tk.mediaOwned != nullptr)
         {
             const auto u8 = tk.mediaOwned->getFile().u8string();
@@ -852,6 +853,7 @@ bool PlaygroundEngine::applySessionTree (const Tree& s, const std::map<std::stri
             tk.name = c.get ("name");
             tk.colour = colourFrom (c.get ("colour", colourText (kPalette[t % 8])), kPalette[t % 8]);
             setTrackMedia (t, m);
+            if (m == nullptr) tk.missingFile = file;
             tk.used.store (true, std::memory_order_release);
         }
         else if (c.hasType ("BUS"))

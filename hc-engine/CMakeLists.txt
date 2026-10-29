@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 # HEM Rework Playground engine on The Hybrid Core idea: C++23, no JUCE.
 # Each plug-in is its own library (hem_pg_fx_<name>) with its own tests.
-project(HEMPlaygroundEngine VERSION 0.11.0 LANGUAGES C CXX)
+project(HEMPlaygroundEngine VERSION 0.11.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -23,7 +23,7 @@ namespace
     std::string fmt1 (double v)
     {
         char b[32];
-        std::snprintf (b, sizeof b, "%.1f", v);
+        std::snprintf (b, sizeof b, "%.1f", std::abs (v) < 0.05 ? 0.0 : v);   // never "-0.0"
         return b;
     }
 }

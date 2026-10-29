@@ -11,7 +11,8 @@ std::string dbText (float db)
 {
     if (db <= E::kFaderOffDb + 0.05f) return "-inf";
     char b[16];
-    std::snprintf (b, sizeof b, "%s%.1f", db > 0.0f ? "+" : "", db);
+    const float shown = std::round (db * 10.0f) / 10.0f;   // what %.1f prints: no sign when it rounds to 0.0
+    std::snprintf (b, sizeof b, "%s%.1f", shown > 0.0f ? "+" : "", shown == 0.0f ? 0.0f : shown);
     return b;
 }
 

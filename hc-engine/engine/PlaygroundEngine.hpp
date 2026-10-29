@@ -173,6 +173,7 @@ private:
         std::atomic<const SampleData*> media { nullptr };
         SampleData::Ptr mediaOwned;      // message thread
         std::string name;                // message thread
+        std::string missingFile;         // message thread: the file a loaded session asked for but was not found (kept on save)
         uint32 colour = 0xff808080;
     };
     struct Retired { std::unique_ptr<Plugin> plugin; SampleData::Ptr media; std::uint64_t epoch; };

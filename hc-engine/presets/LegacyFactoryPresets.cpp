@@ -255,10 +255,10 @@ const std::vector<FactoryPreset>& factory (std::string_view id)
     return none;
 }
 
-const std::vector<std::pair<std::string, float>>& defaults0100 (std::string_view id)
+const std::vector<ParamValue>& defaults0100 (std::string_view id)
 {
     // every control's exact 0.10.0 starting value (from the old engine), by plug-in
-    static const std::vector<std::pair<std::string, std::vector<std::pair<std::string, float>>>> table {
+    static const std::vector<std::pair<std::string, std::vector<ParamValue>>> table {
         { "elite-vox", { { "gate", -0x1.4p+6f }, { "squeeze", 0x0p+0f }, { "output", 0x0p+0f }, { "mode", 0x0p+0f }, { "bypass", 0x0p+0f } } },
         { "elite-eq", { { "b1_on", 0x1p+0f }, { "b1_type", 0x1p+0f }, { "b1_freq", 0x1.ep+4f }, { "b1_gain", 0x0p+0f }, { "b1_q", 0x1.999998p-1f }, { "b2_on", 0x1p+0f }, { "b2_type", 0x0p+0f }, { "b2_freq", 0x1.dffffep+6f }, { "b2_gain", 0x0p+0f }, { "b2_q", 0x1.999998p-1f }, { "b3_on", 0x1p+0f }, { "b3_type", 0x0p+0f }, { "b3_freq", 0x1.9p+8f }, { "b3_gain", 0x0p+0f }, { "b3_q", 0x1.999998p-1f }, { "b4_on", 0x1p+0f }, { "b4_type", 0x0p+0f }, { "b4_freq", 0x1.770004p+10f }, { "b4_gain", 0x0p+0f }, { "b4_q", 0x1.999998p-1f }, { "b5_on", 0x1p+0f }, { "b5_type", 0x0p+0f }, { "b5_freq", 0x1.f3fffcp+11f }, { "b5_gain", 0x0p+0f }, { "b5_q", 0x1.999998p-1f }, { "b6_on", 0x1p+0f }, { "b6_type", 0x0p+0f }, { "b6_freq", 0x1.387ffep+13f }, { "b6_gain", 0x0p+0f }, { "b6_q", 0x1.999998p-1f }, { "output", 0x0p+0f }, { "bypass", 0x0p+0f } } },
         { "elite-comp", { { "threshold", -0x1.2p+4f }, { "ratio", 0x1p+2f }, { "attack", 0x1.400008p+3f }, { "release", 0x1.2bfffep+7f }, { "arc", 0x1p+0f }, { "mode", 0x0p+0f }, { "gain", 0x0p+0f }, { "mix", 0x1.9p+6f }, { "bypass", 0x0p+0f } } },
@@ -279,7 +279,7 @@ const std::vector<std::pair<std::string, float>>& defaults0100 (std::string_view
         { "elite-tune", { { "key", 0x0p+0f }, { "scale", 0x0p+0f }, { "speed", 0x1.9p+4f }, { "amount", 0x1.9p+6f }, { "low", 0x1.4p+6f }, { "high", 0x1.f3fffcp+9f }, { "output", 0x0p+0f }, { "bypass", 0x0p+0f } } },
         { "elite-balance", { { "amount", 0x1.9p+5f }, { "tilt", -0x1.8p+0f }, { "range", 0x1.8p+2f }, { "speed", 0x1p+0f }, { "freeze", 0x0p+0f }, { "output", 0x0p+0f }, { "bypass", 0x0p+0f } } },
     };
-    static const std::vector<std::pair<std::string, float>> none;
+    static const std::vector<ParamValue> none;
     for (auto& [pid, values] : table) if (pid == id) return values;
     return none;
 }

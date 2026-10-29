@@ -14,7 +14,7 @@ namespace hem::pg
 struct FactoryPreset
 {
     std::string name;
-    std::vector<std::pair<std::string, float>> values;   // control id -> real (not 0..1) value
+    std::vector<ParamValue> values;   // control id -> real (not 0..1) value
 };
 
 class Presets
@@ -52,6 +52,6 @@ namespace legacy
     /** The 0.10.0 factory presets (temporary, until the research-based presets replace them). */
     const std::vector<FactoryPreset>& factory (std::string_view pluginId);
     /** Every control's 0.10.0 starting value. */
-    const std::vector<std::pair<std::string, float>>& defaults0100 (std::string_view pluginId);
+    const std::vector<ParamValue>& defaults0100 (std::string_view pluginId);
 }
 } // namespace hem::pg

@@ -27,7 +27,7 @@ struct Scenario
 {
     std::string name, pluginId;
     int split = -1;
-    std::vector<std::pair<std::string, float>> first, second;
+    std::vector<ParamValue> first, second;
     unsigned long long hash = 0, tailHash = 0;
 };
 

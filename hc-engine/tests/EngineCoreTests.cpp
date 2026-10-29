@@ -59,7 +59,7 @@ namespace
 
     std::atomic<float> tempo { 120.0f };
 
-    Stereo render (std::string_view id, const Stereo& in, const std::vector<std::pair<std::string, float>>& settings, bool oldStart)
+    Stereo render (std::string_view id, const Stereo& in, const std::vector<ParamValue>& settings, bool oldStart)
     {
         auto p = PluginRegistry::create (id);
         p->setTempoSource (&tempo);
@@ -132,9 +132,9 @@ namespace
     }
 
     /** Controls that only act once another control is set (measured in the Phase A audit). */
-    const std::map<std::string, std::vector<std::pair<std::string, float>>>& wakeUps()
+    const std::map<std::string, std::vector<ParamValue>>& wakeUps()
     {
-        static const std::map<std::string, std::vector<std::pair<std::string, float>>> m {
+        static const std::map<std::string, std::vector<ParamValue>> m {
             { "elite-vox/mode", { { "gate", -10.0f } } },
             { "elite-eq/b1_on", { { "b1_type", 0.0f } } }, { "elite-eq/b1_freq", { { "b1_type", 0.0f } } }, { "elite-eq/b1_q", { { "b1_gain", -18.0f } } },
             { "elite-eq/b6_on", { { "b6_type", 1.0f } } }, { "elite-eq/b6_freq", { { "b6_type", 1.0f } } }, { "elite-eq/b6_q", { { "b6_gain", -18.0f } } },
@@ -202,6 +202,9 @@ public:
             expectEquals (l[1].toText (1500.0f), std::string ("1.50 s"));
             expectEquals (l[1].toText (3.0f), std::string ("3.0 ms"));
             expectEquals (l[2].toText (-3.0f), std::string ("-3.0 dB"));
+            expectEquals (l[2].toText (-0.0f), std::string ("0.0 dB"));
+            expectEquals (l[2].toText (-0.04f), std::string ("0.0 dB"));
+            expectEquals (l[2].toText (-0.06f), std::string ("-0.1 dB"));
         }
         beginTest ("smoothing reaches its target in exactly the ramp length");
         {
@@ -237,7 +240,7 @@ public:
             {
                 if (p->id() == "bypass" || (std::string (info->id) == "elite-master" && p->id() == "target")) continue;   // TARGET only feeds MATCH TARGET
                 const auto key = std::string (info->id) + "/" + p->id();
-                std::vector<std::pair<std::string, float>> ctx;
+                std::vector<ParamValue> ctx;
                 if (auto it = wakeUps().find (key); it != wakeUps().end()) ctx = it->second;
                 else if (key.starts_with ("elite-eq/b") && (key.ends_with ("_on") || key.ends_with ("_freq") || key.ends_with ("_q")))
                     ctx = { { key.substr (9, 2) + "_type", 3.0f } };   // bands 2-5: a notch acts at any gain

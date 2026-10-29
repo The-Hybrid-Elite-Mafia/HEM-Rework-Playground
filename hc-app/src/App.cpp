@@ -26,7 +26,7 @@
 #include <thread>
 
 #ifndef HEM_PLAYGROUND_VERSION
- #define HEM_PLAYGROUND_VERSION "0.11.0"
+ #define HEM_PLAYGROUND_VERSION "0.11.1"
 #endif
 
 namespace hem::app

@@ -6,6 +6,7 @@
 #include "UnitTest.hpp"
 #include "PlaygroundEngine.hpp"
 #include "export/Exporter.hpp"
+#include "export/Mp3Encoder.hpp"
 #include "export/WavFile.hpp"
 #include "media/MediaLoader.hpp"
 #include "media/SincResampler.hpp"
@@ -14,6 +15,8 @@
 
 #include "dr_wav.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <random>
 
@@ -430,6 +433,20 @@ public:
             expect (contains (missing, "/songs/kick.wav"));
             expect (f->isTrackUsed (t0) && f->isTrackUsed (t1));
             expect (f->getTrackMedia (t0) == nullptr && f->getTrackMedia (t1) == vox);
+            {
+                // saving again keeps the path of the file that was not found (it can be found next time)
+                const auto again = E::mediaFilesIn (f->createSessionTree());
+                expect (contains (again, "/songs/kick.wav") && contains (again, "/songs/vox.wav"));
+                // once the track gets real audio, the old missing path is gone
+                auto g = makeEngine();
+                StringArray missing2;
+                expect (g->applySessionTree (*reread, media, &missing2));
+                g->setTrackMedia (t0, vox);
+                const auto relinked = E::mediaFilesIn (g->createSessionTree());
+                expect (! contains (relinked, "/songs/kick.wav"));
+                g->removeTrack (t0);
+                expect (! contains (E::mediaFilesIn (g->createSessionTree()), "/songs/kick.wav"));
+            }
             expectEquals (f->getTrackName (t1), std::string ("Lead Vox"));
             expect (f->getTrackColour (t1) == 0xffff0000);
             expectEquals (f->getBusName (0), std::string ("Drums"));
@@ -849,6 +866,26 @@ public:
                 expectWithinAbsoluteError (ex6.getCleanGain(), 1.0f, 1.0e-6f);
                 auto qOut = readWav (oq.file, rate);
                 if (qOut.size() > 10000) expectWithinAbsoluteError (qOut.l[10000], 0.1f, 0.002f);
+            }
+
+            beginTest ("export: MP3 gets exactly the 16-bit samples (0.10.0 made them 0.0003 dB quieter)");
+            {
+                std::vector<std::int16_t> in;
+                for (int v = -32768; v <= 32767; ++v) { in.push_back ((std::int16_t) v); in.push_back ((std::int16_t) -std::max (v, -32767)); in.push_back (7); }
+                const int frames = (int) in.size() / 3;
+                std::vector<std::int16_t> now ((size_t) frames * 2), old ((size_t) frames * 2);
+                Mp3Encoder::toEncoderSamples (in.data(), frames, 3, 2, now.data(), false);
+                Mp3Encoder::toEncoderSamples (in.data(), frames, 3, 2, old.data(), true);
+                int same = 0, moved = 0;
+                for (int i = 0; i < frames; ++i)
+                    for (int ch = 0; ch < 2; ++ch)
+                    {
+                        same += now[(size_t) (i * 2 + ch)] == in[(size_t) (i * 3 + ch)] ? 1 : 0;
+                        moved += old[(size_t) (i * 2 + ch)] != in[(size_t) (i * 3 + ch)] ? 1 : 0;
+                    }
+                expectEquals (same, frames * 2);          // every value, both channels, third channel left out
+                expect (moved > 0, "the old way should move some samples");
+                expect (! Mp3Encoder::legacySamplesForCheck(), "the app must encode the new way");
             }
 
 #if defined(_WIN32)

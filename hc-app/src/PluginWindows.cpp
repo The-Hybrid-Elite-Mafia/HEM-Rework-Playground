@@ -527,13 +527,13 @@ void PluginWindow::drawSwirl (Rect area)
     };
 
     // buttons
-    const Rect heightB { area.right() - 170.0f * U, area.y + 6.0f * U, 160.0f * U, 22.0f * U };
+    const Rect heightB { area.right() - 140.0f * U, area.y + 6.0f * U, 130.0f * U, 22.0f * U };
     const char* camNames[4] { "3D", "TOP", "SIDE", "FRONT" };
     const Id base = makeId ("swirl", (std::uint64_t) (std::uintptr_t) swirl);
     for (int i = 0; i < 4; ++i)
     {
-        const float w = 50.0f * U;
-        const Rect cb { area.right() - 180.0f * U - (float) (4 - i) * (w + 5.0f * U), area.y + 6.0f * U, w, 22.0f * U };
+        const float w = 42.0f * U;
+        const Rect cb { area.right() - 146.0f * U - (float) (4 - i) * (w + 4.0f * U), area.y + 6.0f * U, w, 22.0f * U };
         if (ui->button (subId (base, 1 + (std::uint64_t) i), cb, camNames[i], ButtonLook::dark, acc, true, camera == i, 10.0f * U))
         {
             camera = i;
@@ -548,7 +548,9 @@ void PluginWindow::drawSwirl (Rect area)
     }
     const char* modes[3] { "HEIGHT: LEVEL", "HEIGHT: STEREO WIDTH", "HEIGHT: LEFT / RIGHT" };
     if (ui->button (subId (base, 10), heightB, modes[heightMode], ButtonLook::dark, acc, true, false, 10.0f * U)) heightMode = (heightMode + 1) % 3;
-    p.text ("3D SWIRL MAP  -  drag to turn", { area.x + 12.0f * U, area.y + 6.0f * U, 200.0f * U, 22.0f * U }, 11.0f * U, true, colours::paper);
+    // title on the left (clear of the view buttons, which start 176 U from the left edge); the hint sits at the bottom
+    p.text ("3D SWIRL MAP", { area.x + 12.0f * U, area.y + 6.0f * U, 150.0f * U, 22.0f * U }, 11.0f * U, true, colours::paper);
+    p.text ("drag to turn  -  double-click = reset", { area.x + 12.0f * U, area.bottom() - 22.0f * U, 240.0f * U, 18.0f * U }, 9.0f * U, false, colours::paperDim);
 
     auto d = ui->drag (subId (base, 20), trimTop (area, 32.0f * U));
     if (d.started) { dragYaw = yaw; dragPitch = pitch; if (d.doubleClick) { camera = 0; yaw = -0.62f; pitch = 0.62f; } }
