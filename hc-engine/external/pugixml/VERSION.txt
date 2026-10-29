@@ -1,0 +1,1 @@
+pugixml v1.14 (MIT), https://github.com/zeux/pugixml, commit db78afc2b7d8f043b4bc6b185635d949ea2ed2a8

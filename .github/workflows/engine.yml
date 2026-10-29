@@ -1,0 +1,66 @@
+name: Build and test the C++23 Playground engine
+
+# The new HEM Rework Playground engine (hc-engine/: C++23, no JUCE) on a Windows machine in the cloud:
+# builds every plug-in engine with Visual Studio 2022, runs the engine tests, then renders 1,322
+# scenarios through the 0.10.0 JUCE plug-ins and the new engines and compares every output.
+# Manual only (workflow_dispatch). Results are written as notices on the run (readable from the API).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Configure the engine (C++23, MSVC)
+        run: cmake -S hc-engine -B build-engine -G "Visual Studio 17 2022" -A x64
+
+      - name: Build the engine, tests and the render checker
+        run: cmake --build build-engine --config Release --parallel
+
+      - name: Run the engine tests
+        shell: pwsh
+        run: |
+          $out = & build-engine\Release\hem_pg_tests.exe 2>&1
+          $rc = $LASTEXITCODE
+          $out | Set-Content engine-tests.txt
+          $out | Select-String -Pattern '^!!!|\[FAIL\]' | ForEach-Object { Write-Host "::error title=engine test::$_" }
+          $summary = ($out | Select-String -Pattern 'HEM ENGINE TEST SUMMARY').Line
+          Write-Host "::notice title=engine tests::$summary"
+          exit $rc
+
+      - name: Build the 0.10.0 plug-ins as a renderer (JUCE 8.0.15, only for the comparison)
+        run: |
+          cmake -S hc-engine/tools/legacy-render -B build-legacy -G "Visual Studio 17 2022" -A x64
+          cmake --build build-legacy --config Release --parallel
+
+      - name: Compare every render, 0.10.0 vs the new engines
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force cmp | Out-Null
+          & build-legacy\LegacyRender_artefacts\Release\legacy-render.exe cmp
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error title=legacy render::failed"; exit 1 }
+          $out = & build-engine\Release\hem_pg_render.exe cmp --fixes hc-engine\tools\render\known-fixes.txt 2>&1
+          $rc = $LASTEXITCODE
+          $out | Set-Content port-compare.txt
+          $out | Select-String -Pattern '^DIFFERS|^MISSING|^UNKNOWN' | Select-Object -First 40 | ForEach-Object { Write-Host "::error title=port differs::$_" }
+          $out | Select-String -Pattern '^PLUGIN' | ForEach-Object { Write-Host "::notice title=plug-in::$($_.Line)" }
+          $summary = ($out | Select-String -Pattern 'HEM PORT SUMMARY').Line
+          Write-Host "::notice title=port compare::$summary"
+          exit $rc
+
+      - name: Keep the test and comparison logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-logs
+          path: |
+            engine-tests.txt
+            port-compare.txt

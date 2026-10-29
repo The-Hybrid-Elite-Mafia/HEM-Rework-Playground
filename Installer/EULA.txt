@@ -1,38 +1,23 @@
-HYBRID STUDIO 2.0 - FREE END USER LICENSE AGREEMENT
+HEM REWORK PLAYGROUND - LICENSE
 
-Copyright (c) 2026 Steven Reliford / Hybrid Elite Mafia. All rights reserved.
+Copyright (c) 2026 Steven Reliford / Hybrid Elite Mafia.
 
-Please read this agreement before installing. By installing or using HEM Rework Playground ("the Software") you agree to these terms. If you do not agree, do not install or use the Software.
+HEM Rework Playground is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3 of the License, or (at your option) any later version. The full license text is installed next to the program as GPL-3.0.txt and is at https://www.gnu.org/licenses/gpl-3.0.html. The source code is at https://github.com/The-Hybrid-Elite-Mafia/HEM-Rework-Playground.
 
-1. FREE LICENSE
-You may download, install and use the Software free of charge, on as many of your own computers as you like, online or offline, for personal or professional work.
+In plain words:
+- It is free. Use it on as many computers as you like, for personal or professional work.
+- You may share it and change it, as long as what you share stays under the same GPL v3 license with its source code.
+- Everything you make with it (songs, beats, mixes, stems, exports, projects) is yours. No credit or payment is owed.
 
-2. YOUR MUSIC IS YOURS
-Everything you create with the Software (songs, beats, mixes, stems, exports and projects) belongs to you. You may use, sell and publish it however you want. No credit or payment is owed.
+NO WARRANTY
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for details. Keep backups of your projects and audio.
 
-3. WHAT YOU MAY NOT DO
-You may not:
-  a) sell, rent, lease or charge any fee for the Software, or bundle it with something you sell;
-  b) re-upload, mirror or redistribute the Software or its installer; share the official download link instead;
-  c) modify, translate, decompile, disassemble or reverse engineer the Software, except where the law expressly allows it despite this restriction;
-  d) remove, hide or change any copyright notice, name, logo or credit in the Software, its faceplates or its manual;
-  e) present the Software, or any part of it, as your own work or under another name;
-  f) extract or reuse the Software's artwork, faceplates, icons or manual outside the Software.
+NAMES AND LOGOS
+Under section 7(e) of the GPL, no right is given to use the names "Hybrid Elite Mafia", "HEM" or "Hybrid Studio", or the crown and hooded-figure logos, to name or promote a changed version. A changed version must carry its own name.
 
-4. OWNERSHIP
-The Software is licensed, not sold. Steven Reliford / Hybrid Elite Mafia keeps all rights, title and interest in the Software, including its code, design, artwork and documentation, except the third-party components listed in section 7. "Hybrid Elite Mafia", "Hybrid Studio" and the hooded-figure logo are names and marks of Hybrid Elite Mafia.
-
-5. UPDATES AND ENDING
-New versions may be released at any time and are covered by the agreement that comes with them. This license ends automatically if you break these terms; you must then uninstall and delete the Software.
-
-6. NO WARRANTY
-The Software is provided "AS IS", free of charge, without warranty of any kind, express or implied, including merchantability, fitness for a particular purpose and non-infringement. Keep backups of your projects and audio.
-
-7. THIRD-PARTY COMPONENTS
-The Software is built with the JUCE framework (juce.com), used under its own license. It uses the Poppins typeface by the Indian Type Foundry, licensed under the SIL Open Font License 1.1 (scripts.sil.org/OFL); the font itself is not covered by the restrictions in section 3. Song Forge talks to ACE-Step 1.5, which you install separately under its own license. These components and their trademarks belong to their respective owners.
-
-8. LIMITATION OF LIABILITY
-To the maximum extent allowed by law, Steven Reliford / Hybrid Elite Mafia is not liable for any damages of any kind arising from the use of, or inability to use, the Software, including lost data, lost audio or lost profits.
-
-9. GENERAL
-If any part of this agreement cannot be enforced, the rest stays in effect. This is the entire agreement about the Software between you and Steven Reliford / Hybrid Elite Mafia.
+THIRD-PARTY COMPONENTS
+- JUCE framework (juce.com), used under its AGPLv3 license option (version 0.10 line; the new engine does not use JUCE).
+- Poppins typeface by the Indian Type Foundry, SIL Open Font License 1.1 (scripts.sil.org/OFL).
+- pugixml by Arseny Kapoulkine, MIT license (new engine).
+- Song Forge talks to ACE-Step 1.5, which you install separately under its own license.
+These components and their trademarks belong to their respective owners.

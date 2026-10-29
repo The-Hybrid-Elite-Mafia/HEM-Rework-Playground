@@ -135,7 +135,7 @@ if(PG_BUILD_APP)
     juce_add_gui_app(ReworkPlayground
         PRODUCT_NAME "HEM Rework Playground"
         COMPANY_NAME "Hybrid Elite Mafia"
-        COMPANY_COPYRIGHT "Copyright (c) 2026 Steven Reliford / Hybrid Elite Mafia. All rights reserved."
+        COMPANY_COPYRIGHT "Copyright (c) 2026 Steven Reliford / Hybrid Elite Mafia. Free software under the GNU GPL v3."
         BUNDLE_ID com.hybridelitemafia.reworkplayground
         VERSION ${PROJECT_VERSION}
         ICON_BIG   ${CMAKE_CURRENT_SOURCE_DIR}/Assets/Icon/HEM-Icon-1024.png

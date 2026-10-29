@@ -56,7 +56,7 @@ UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 VersionInfoVersion={#AppVersion}
 VersionInfoCopyright=Copyright (c) 2026 Steven Reliford / Hybrid Elite Mafia
-AppCopyright=Copyright (c) 2026 Steven Reliford / Hybrid Elite Mafia. Free software - all rights reserved.
+AppCopyright=Copyright (c) 2026 Steven Reliford / Hybrid Elite Mafia. Free software under the GNU GPL v3.
 LicenseFile=EULA.txt
 
 [Languages]
@@ -76,6 +76,7 @@ Name: "{userdocs}\Hybrid Elite Mafia\Rework Playground\Library"; Flags: uninsnev
 [Files]
 Source: "{#BuildDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "EULA.txt"; DestDir: "{app}"; DestName: "License.txt"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "GPL-3.0.txt"; Flags: ignoreversion
 #ifdef SoundPackDir
 Source: "{#SoundPackDir}\*"; DestDir: "{app}\Sounds\HEM Sound Pack"; Flags: ignoreversion recursesubdirs createallsubdirs
 

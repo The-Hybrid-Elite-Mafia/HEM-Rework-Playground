@@ -1,0 +1,7 @@
+# Renders that are allowed to differ from 0.10.0 because a bug was fixed or a setting changed on purpose.
+# One per line:  plugin-id|text the scenario name contains (empty = every scenario)|why[|start-only]
+# "start-only" = accepted only if everything after the first 2048 samples is still bit-identical.
+elite-doubler|delay=5.000|0.10.0 read one sample past the end of its delay line when the read point rounded up to the line length (a one-sample click); the fix changes 1 sample in 6 s
+elite-channel||0.10.0 faded OUTPUT in from silence over the first 20 ms after every start; now it starts at full level|start-only
+elite-hush|amount=0.000|AMOUNT at 0 now means off (0.10.0 still took out what sat right on the noise floor)
+elite-lofi|tone=20000.000|TONE at the top (20 kHz) now means no filter at all (0.10.0 still filtered there)
