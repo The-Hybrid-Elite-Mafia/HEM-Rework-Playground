@@ -35,8 +35,8 @@ void Plugin::prepare (double sampleRate, int maximumExpectedSamplesPerBlock)
 {
     sampleRateHz = sampleRate > 0.0 ? sampleRate : 48000.0;
     maxBlockSize = jmax (1, maximumExpectedSamplesPerBlock);
-    dryL.assign ((std::size_t) maxBlockSize, 0.0f);
-    dryR.assign ((std::size_t) maxBlockSize, 0.0f);
+    alignedDryL.assign ((std::size_t) maxBlockSize, 0.0f);
+    alignedDryR.assign ((std::size_t) maxBlockSize, 0.0f);
     prepareDsp (sampleRateHz, maxBlockSize);
     latency = jmax (0, dspLatency());
     dryDelayL.assign ((std::size_t) jmax (1, latency), 0.0f);
@@ -83,8 +83,8 @@ void Plugin::processStereo (float* left, float* right, int numSamples) noexcept
     const float target = isBypassedNow() ? 0.0f : 1.0f;
     const bool steadyBypass = target == 0.0f && wetMix == 0.0f;
 
-    float* dl = dryL.data();
-    float* dr = dryR.data();
+    float* dl = alignedDryL.data();
+    float* dr = alignedDryR.data();
     if (latency == 0)
     {
         std::copy (left, left + numSamples, dl);

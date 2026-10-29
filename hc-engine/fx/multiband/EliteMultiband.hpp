@@ -3,7 +3,7 @@
 #include "hem/pg/Plugin.hpp"
 #include "hem/pg/Biquad.hpp"
 #include "hem/pg/DspMath.hpp"
-#include "Dynamics.hpp"
+#include "hem/pg/Dynamics.hpp"
 #include <complex>
 
 namespace hem::pg

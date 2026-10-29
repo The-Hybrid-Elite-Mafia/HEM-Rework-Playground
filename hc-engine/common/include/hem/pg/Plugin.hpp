@@ -117,7 +117,7 @@ private:
     const std::atomic<bool>* groupBypass = nullptr;
     const std::atomic<float>* tempo = nullptr;
 
-    std::vector<float> dryL, dryR;            // maxBlock each
+    std::vector<float> alignedDryL, alignedDryR;            // maxBlock each
     std::vector<float> dryDelayL, dryDelayR;  // latency alignment of the dry path
     int dryDelayPos = 0, latency = 0;
     float wetMix = 1.0f, wetStep = 0.0f;      // 1 = processed, 0 = bypassed

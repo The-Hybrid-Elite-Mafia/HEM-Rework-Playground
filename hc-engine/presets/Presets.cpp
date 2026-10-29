@@ -25,8 +25,12 @@ namespace
 std::filesystem::path Presets::appDataFolder()
 {
 #if defined(_WIN32)
-    const char* base = std::getenv ("APPDATA");
-    std::filesystem::path root = base != nullptr ? std::filesystem::path (base) : std::filesystem::temp_directory_path();
+    std::filesystem::path root = std::filesystem::temp_directory_path();
+    char* base = nullptr;
+    std::size_t len = 0;
+    if (_dupenv_s (&base, &len, "APPDATA") == 0 && base != nullptr)
+        root = std::filesystem::path (base);
+    std::free (base);
 #else
     const char* xdg = std::getenv ("XDG_CONFIG_HOME");
     const char* home = std::getenv ("HOME");
