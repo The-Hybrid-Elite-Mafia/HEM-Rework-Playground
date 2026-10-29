@@ -145,7 +145,8 @@ namespace
     Result readOgg (const std::filesystem::path& file, Decoded& d)
     {
 #if defined(_WIN32)
-        FILE* f = _wfopen (file.c_str(), L"rb");
+        FILE* f = nullptr;
+        if (_wfopen_s (&f, file.c_str(), L"rb") != 0) f = nullptr;
 #else
         FILE* f = std::fopen (file.c_str(), "rb");
 #endif

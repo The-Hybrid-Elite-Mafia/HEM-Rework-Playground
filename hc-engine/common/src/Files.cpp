@@ -34,7 +34,15 @@ fs::path documentsFolder()
     if (SUCCEEDED (SHGetKnownFolderPath (FOLDERID_Documents, 0, nullptr, &raw)) && raw != nullptr) result = fs::path (raw);
     CoTaskMemFree (raw);
     if (! result.empty()) return result;
-    if (const wchar_t* profile = _wgetenv (L"USERPROFILE")) return fs::path (profile) / L"Documents";
+    wchar_t* profile = nullptr;
+    std::size_t len = 0;
+    if (_wdupenv_s (&profile, &len, L"USERPROFILE") == 0 && profile != nullptr)
+    {
+        const fs::path docs = fs::path (profile) / L"Documents";
+        std::free (profile);
+        return docs;
+    }
+    std::free (profile);
     return fs::temp_directory_path();
 #else
     if (const char* home = std::getenv ("HOME")) return fs::path (home) / "Documents";

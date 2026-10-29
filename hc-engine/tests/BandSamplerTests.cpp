@@ -235,8 +235,18 @@ public:
 
         // The real pack: set HEM_SOUND_PACK to its folder, or install it where the app looks.
         auto real = std::make_shared<SoundPack>();
-        const char* env = std::getenv ("HEM_SOUND_PACK");
-        if (env != nullptr && *env != 0) expect (real->open (files::toPath (env), err), err);
+        std::string env;
+#if defined(_WIN32)
+        {
+            char* raw = nullptr;
+            std::size_t len = 0;
+            if (_dupenv_s (&raw, &len, "HEM_SOUND_PACK") == 0 && raw != nullptr) env = raw;
+            std::free (raw);
+        }
+#else
+        if (const char* raw = std::getenv ("HEM_SOUND_PACK")) env = raw;
+#endif
+        if (! env.empty()) expect (real->open (files::toPath (env), err), err);
         else real = std::const_pointer_cast<SoundPack> (SoundPack::findInstalled());
         if (! real->isOpen())
         {

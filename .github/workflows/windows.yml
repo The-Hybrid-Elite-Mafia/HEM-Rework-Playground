@@ -41,7 +41,7 @@ jobs:
           du -sh soundpack
 
       - name: Keep the sound pack build report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: SoundPack-build-report
           path: soundpack/BUILD-REPORT.txt
@@ -65,7 +65,7 @@ jobs:
 
       - name: Keep the test log
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: PlaygroundTests-log
           path: tests.txt
@@ -101,7 +101,7 @@ jobs:
           dir Installer\Output
 
       - name: Upload the installer
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ReworkPlayground-Windows-Installer
           path: Installer/Output/*.exe

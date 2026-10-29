@@ -19,7 +19,8 @@ namespace
     {
 #if defined(_WIN32)
         std::wstring m (mode, mode + std::strlen (mode));
-        return _wfopen (p.c_str(), m.c_str());
+        std::FILE* f = nullptr;
+        return _wfopen_s (&f, p.c_str(), m.c_str()) == 0 ? f : nullptr;
 #else
         return std::fopen (p.c_str(), mode);
 #endif

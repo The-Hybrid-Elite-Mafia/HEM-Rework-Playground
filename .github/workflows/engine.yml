@@ -100,7 +100,7 @@ jobs:
 
       - name: Keep the test and comparison logs
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: engine-logs
           path: |

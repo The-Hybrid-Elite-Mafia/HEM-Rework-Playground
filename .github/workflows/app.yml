@@ -199,7 +199,7 @@ jobs:
           Write-Host "::notice title=installer::$($f.Name) $([math]::Round($f.Length / 1mb, 1)) MB"
 
       - name: Upload the installer
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ReworkPlayground-0.11-Windows-Installer
           path: Installer/Output/*.exe
