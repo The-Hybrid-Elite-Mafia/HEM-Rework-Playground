@@ -512,7 +512,7 @@ public:
             expectLessThan (er, el * 1.0e-6, "nothing should leak to the right");
         }
 
-        beginTest ("Elite Master: never exceeds the ceiling; LUFS of a -20 dBFS 1 kHz stereo sine reads about -20");
+        beginTest ("Elite Master: never exceeds the ceiling; LUFS of a -20 dBFS 1 kHz stereo sine reads -20.0 +/- 0.1");
         {
             auto p = make ("elite-master");
             set (*p, "input", 18.0f); set (*p, "ceiling", -1.0f);
@@ -524,7 +524,7 @@ public:
             auto m = make ("elite-master");
             auto t = sine ((int) kFs * 5, 1000.0, params::dbToGain (-20.0f));
             run (*m, t);
-            expectWithinAbsoluteError (m->getReadout (EliteMaster::integrated), -20.0f, 0.5f);
+            expectWithinAbsoluteError (m->getReadout (EliteMaster::integrated), -20.0f, 0.1f);
             expectWithinAbsoluteError (m->getReadout (EliteMaster::truePeak), -20.0f, 0.3f);
             set (*m, "target", 0.0f);   // -14
             expect (static_cast<EliteMaster&> (*m).matchTarget());

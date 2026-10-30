@@ -99,7 +99,7 @@ target_link_libraries(hem_pg_bench PRIVATE hem_pg_engine)
 
 enable_testing()
 add_executable(hem_pg_tests tests/TestMain.cpp tests/PluginTests.cpp tests/EngineCoreTests.cpp tests/MixerTests.cpp
-    tests/BandTests.cpp tests/BandSamplerTests.cpp tests/LibraryTests.cpp tests/AnalysisSongForgeTests.cpp)
+    tests/BandTests.cpp tests/BandSamplerTests.cpp tests/LibraryTests.cpp tests/AnalysisSongForgeTests.cpp tests/LoudnessTests.cpp)
 target_include_directories(hem_pg_tests PRIVATE tests)
 target_link_libraries(hem_pg_tests PRIVATE hem_pg_engine hem_pg_band hem_pg_library hem_pg_analysis hem_pg_songforge hem_pg_registry hem_pg_presets hem_pg_decoders)
 add_test(NAME hem_pg_tests COMMAND hem_pg_tests)
